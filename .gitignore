@@ -1,4 +1,8 @@
-.idea
-.DS_Store
-*.pyc
-config.py
+# Python
+.venv
+__pycache__
+.pytest_cache
+.env
+
+# Claude
+.claude/settings.local.json

@@ -1,128 +1,195 @@
-# Python Diffbot API Client
+# Diffbot Python Library
+
+Python client library for [Diffbot](https://www.diffbot.com) APIs.
 
 
-## Preface
-Identify and extract the important parts of any web page in Python!  This client currently supports calls to Diffbot's Automatic APIs and Crawlbot.
+## Installation
 
+```bash
+pip install git+https://github.com/diffbot/diffbot-python.git
+```
 
-Installation
-To install activate a new virtual environment and run the following command:
+Or, for local development:
 
-    $ pip install -r requirements.txt
-
-## Configuration
-
-To run the example, you must first configure a working API token in config.py:
-
-    $ cp config.py.example config.py; vim config.py;
-
-Then replace the string "SOME_TOKEN" with your API token.  Finally, to run the example:
-
-    $ python example.py
+```bash
+pip install -e ".[dev]"
+```
 
 ## Usage
 
-### Article API
-An example call to the Article API:
+### Authentication
+Set your Diffbot API token in your environment or .env.
 
-```
-diffbot = DiffbotClient()
-token = "SOME_TOKEN"
-version = 2
-url = "http://shichuan.github.io/javascript-patterns/"
-api = "article"
-response = diffbot.request(url, token, api, version=2)
+```bash
+export DIFFBOT_API_TOKEN=<TOKEN>
 ```
 
-### Product API
-An example call to the Product API:
+### Extract structured content
+```python
+from diffbot import Diffbot
 
-```
-diffbot = DiffbotClient()
-token = "SOME_TOKEN"
-version = 2
-url = "http://www.overstock.com/Home-Garden/iRobot-650-Roomba-Vacuuming-Robot/7886009/product.html"
-api = "product"
-response = diffbot.request(url, token, api, version=version)
+db = Diffbot(token="YOUR_TOKEN")
+data = db.extract("https://www.example.com")
 ```
 
-### Image API
-An example call to the Image API:
+### Ask Diffbot LLM
+```python
+from diffbot import Diffbot
 
-```
-diffbot = DiffbotClient()
-token = "SOME_TOKEN"
-version = 2
-url = "http://www.google.com/"
-api = "image"
-response = diffbot.request(url, token, api, version=version)
+db = Diffbot(token="YOUR_TOKEN")
+for chunk in db.ask([{"role": "user", "content": "What's the capital of France?"}]):
+    print(chunk, end="")
 ```
 
-### Analyze API
-An example call to the Analyze API:
+### Crawl a site for structured content
+```python
+from diffbot import Diffbot
 
-```
-diffbot = DiffbotClient()
-token = "SOME_TOKEN"
-version = 2
-url = "http://www.twitter.com/"
-api = "analyze"
-response = diffbot.request(url, token, api, version=version)
+db = Diffbot(token="YOUR_TOKEN")
+for event in db.crawl("https://www.example.com", hops=1):
+    print(event)
 ```
 
-### Crawlbot API
-To start a new crawl, specify a crawl name, seed URLs, and the API via which URLs should be processed. An example call to the Crawlbot API:
+### Query the Knowledge Graph
+```python
+from diffbot import Diffbot
 
-```
-token = "SOME_TOKEN"
-name = "sampleCrawlName"
-seeds = "http://www.twitter.com/"
-api = "analyze"
-sampleCrawl = DiffbotCrawl(token,name,seeds=seeds,api=api)
+db = Diffbot(token="YOUR_TOKEN")
+results = db.dql('type:Organization name:"Diffbot"')
 ```
 
-Omit "seeds" and "api" to load an existing crawl, or create a crawl as a placeholder.
+### Web Search
+```python
+from diffbot import Diffbot
 
-To check the status of a crawl:
-
-```
-sampleCrawl.status()
-```
-
-To update a crawl:
-
-```
-maxToCrawl = 100
-upp = "diffbot"
-sampleCrawl.update(maxToCrawl=maxToCrawl,urlProcessPattern=upp)
+db = Diffbot(token="YOUR_TOKEN")
+results = db.web_search("diffbot knowledge graph")
+for r in results["search_results"]:
+    print(r["score"], r["title"], r["pageUrl"])
+    print(r["content"])
 ```
 
-To delete or restart a crawl:
+### Entities (NLP)
+```python
+from diffbot import Diffbot
 
-```
-sampleCrawl.delete()
-sampleCrawl.restart()
-```
-
-To download crawl data:
-
-```
-sampleCrawl.download() # returns JSON by default
-sampleCrawl.download(data_format="csv")
+db = Diffbot(token="YOUR_TOKEN")
+result = db.entities("Apple CEO Tim Cook announced record quarterly earnings.")
+for entity in result["entities"]:
+    print(entity["name"], entity.get("type"), entity.get("id"))
+print("sentiment:", result.get("sentiment"))
 ```
 
-To pass additional arguments to a crawl:
+## Async Usage
 
+### Extract structured content
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        data = await db.extract("https://www.example.com")
+        print(data)
+
+asyncio.run(main())
 ```
-sampleCrawl = DiffbotCrawl(token,name,seeds,apiUrl,maxToCrawl=100,maxToProcess=50,notifyEmail="support@diffbot.com")
+
+### Ask Diffbot LLM
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        async for chunk in db.ask([{"role": "user", "content": "What's the capital of France?"}]):
+            print(chunk, end="")
+
+asyncio.run(main())
 ```
 
-## Testing
+### Crawl a site for structured content
+```python
+import asyncio
+from diffbot import DiffbotAsync
 
-First install the test requirements with the following command:
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        async for event in db.crawl("https://www.example.com", hops=1):
+            print(event)
 
-    $ pip install -r test_requirements.txt
+asyncio.run(main())
+```
 
-Currently there are some simple unit tests that mock the API calls and return data from fixtures in the filesystem.  From the project directory, simply run:
+### Query the Knowledge Graph
+```python
+import asyncio
+from diffbot import DiffbotAsync
 
-    $ nosetests
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        results = await db.dql('type:Organization name:"Diffbot"')
+        print(results)
+
+asyncio.run(main())
+```
+
+### Web Search
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        results = await db.web_search("diffbot knowledge graph")
+        for r in results["search_results"]:
+            print(r["score"], r["title"], r["pageUrl"])
+            print(r["content"])
+
+asyncio.run(main())
+```
+
+### Entities (NLP)
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        result = await db.entities("Apple CEO Tim Cook announced record quarterly earnings.")
+        for entity in result["entities"]:
+            print(entity["name"], entity.get("type"), entity.get("id"))
+        print("sentiment:", result.get("sentiment"))
+
+asyncio.run(main())
+```
+
+## CLI
+
+This library also includes a CLI.
+
+```bash
+export DIFFBOT_API_TOKEN=your-token-here
+
+db extract https://www.example.com
+db ask "What's the capital of France?"
+db crawl https://www.example.com --hops 1
+db crawl-list-jobs
+db crawl-delete-job crawl-1234567890
+db web-search "diffbot knowledge graph"
+db web-search "diffbot knowledge graph" -n 5 -f json
+db entities "Apple CEO Tim Cook announced record quarterly earnings."
+db entities "Apple CEO Tim Cook announced record quarterly earnings." -f dql
+```
+
+## Tests
+
+Run the mock test suite:
+```bash
+python -m pytest
+```
+
+Run live integration tests against the real API (requires a valid token):
+```bash
+DIFFBOT_TOKEN=your_token python -m pytest -m live
+```
