@@ -2,7 +2,7 @@
 import httpx
 import pytest
 
-from diffbot import CrawlEventType, Diffbot, DiffbotAsync
+from diffbot import CrawlEventType, Diffbot, DiffbotAsync, resolve_token
 
 SSE_PARIS = 'data: {"choices": [{"delta": {"content": "Paris"}}]}\n'
 
@@ -173,3 +173,21 @@ async def test_readme_async_entities():
     assert len(result["entities"]) == 2
     assert result["entities"][0]["name"] == "Apple"
     assert result["sentiment"] == 0.3
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+def test_readme_authentication_resolve_token(monkeypatch, tmp_path):
+    # README "Authentication": Diffbot(token=resolve_token()) using the env var.
+    monkeypatch.setenv("DIFFBOT_API_TOKEN", "test-token")
+    monkeypatch.setattr("diffbot._auth.CREDENTIALS_PATH", tmp_path / "missing")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["token"] == "test-token"
+        return httpx.Response(200, json={"objects": [{"title": "Example"}]})
+
+    db = Diffbot(token=resolve_token(), transport=httpx.MockTransport(handler))
+    data = db.extract("https://www.example.com")
+    assert "objects" in data

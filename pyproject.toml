@@ -71,5 +71,5 @@ include = [
 ]
 
 [tool.pytest.ini_options]
-markers = ["live: marks tests as live integration tests requiring a real DIFFBOT_TOKEN"]
+markers = ["live: marks tests as live integration tests requiring a real DIFFBOT_API_TOKEN"]
 addopts = "-m 'not live'"

@@ -1,15 +1,13 @@
-import os
-
 import pytest
 
-from diffbot import Diffbot
+from diffbot import Diffbot, resolve_token
 
 
 @pytest.fixture(scope="session")
 def live_token():
-    token = os.environ.get("DIFFBOT_TOKEN")
+    token = resolve_token()
     if not token:
-        pytest.skip("DIFFBOT_TOKEN not set")
+        pytest.skip("no Diffbot token found (set DIFFBOT_API_TOKEN or ~/.diffbot/credentials)")
     return token
 
 

@@ -1,8 +1,11 @@
 """Diffbot Knowledge Graph APIs: DQL search and entity enhancement."""
 
+import asyncio
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
+
+from .ontology import Ontology
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -83,8 +86,43 @@ def dql_parallel(
         return list(ex.map(lambda q: dql(client, **q), queries))
 
 
+async def dql_parallel_async(
+    client: "DiffbotAsync",
+    queries: Sequence[Dict[str, Any]],
+    *,
+    workers: int = 8,
+) -> List[Union[Dict[str, Any], bytes]]:
+    if not queries:
+        return []
+    sem = asyncio.Semaphore(workers)
+
+    async def _one(q: Dict[str, Any]) -> Union[Dict[str, Any], bytes]:
+        async with sem:
+            return await dql_async(client, **q)
+
+    return await asyncio.gather(*(_one(q) for q in queries))
+
+
 def dql_refresh_ontology(client: "Diffbot", dest: pathlib.Path) -> None:
     response = client._http.get(KG_ONTOLOGY_ENDPOINT)
     client._raise_for_status(response)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(response.content)
+
+
+def dql_fetch_ontology(client: "Diffbot") -> Ontology:
+    """Download the ontology and return it as a queryable :class:`Ontology`.
+
+    Performs no caching — the caller decides whether and where to hold onto the
+    result. Use :func:`dql_refresh_ontology` instead to persist raw bytes to disk.
+    """
+    response = client._http.get(KG_ONTOLOGY_ENDPOINT)
+    client._raise_for_status(response)
+    return Ontology.from_json(response.content)
+
+
+async def dql_fetch_ontology_async(client: "DiffbotAsync") -> Ontology:
+    """Async variant of :func:`dql_fetch_ontology`."""
+    response = await client._http.get(KG_ONTOLOGY_ENDPOINT)
+    client._raise_for_status(response)
+    return Ontology.from_json(response.content)

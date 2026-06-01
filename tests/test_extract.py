@@ -1,7 +1,15 @@
 import httpx
 import pytest
 
-from diffbot import APIError, AuthError, Diffbot, ExtractionError, RateLimitError, ValidationError
+from diffbot import (
+    APIError,
+    AuthError,
+    Diffbot,
+    ExtractionError,
+    RateLimitError,
+    ValidationError,
+    resolve_token,
+)
 
 
 """
@@ -38,6 +46,36 @@ def test_extract_normalizes_url():
 def test_token_required():
     with pytest.raises(ValidationError):
         Diffbot(token="")
+
+
+def test_resolve_token_explicit_wins(monkeypatch, tmp_path):
+    # An explicit token takes precedence over env var and file.
+    monkeypatch.setenv("DIFFBOT_API_TOKEN", "env-token")
+    assert resolve_token("explicit-token") == "explicit-token"
+
+
+def test_resolve_token_from_env(monkeypatch, tmp_path):
+    # A token in the environment is returned when none is passed.
+    monkeypatch.setenv("DIFFBOT_API_TOKEN", "env-token")
+    monkeypatch.setattr("diffbot._auth.CREDENTIALS_PATH", tmp_path / "missing")
+    assert resolve_token() == "env-token"
+    # And can be used to build a client.
+    assert Diffbot(token=resolve_token()).token == "env-token"
+
+
+def test_resolve_token_from_credentials_file(monkeypatch, tmp_path):
+    # Falls back to ~/.diffbot/credentials when no env var is set.
+    monkeypatch.delenv("DIFFBOT_API_TOKEN", raising=False)
+    creds = tmp_path / "credentials"
+    creds.write_text("DIFFBOT_API_TOKEN=file-token\n")
+    monkeypatch.setattr("diffbot._auth.CREDENTIALS_PATH", creds)
+    assert resolve_token() == "file-token"
+
+
+def test_resolve_token_missing_returns_empty(monkeypatch, tmp_path):
+    monkeypatch.delenv("DIFFBOT_API_TOKEN", raising=False)
+    monkeypatch.setattr("diffbot._auth.CREDENTIALS_PATH", tmp_path / "missing")
+    assert resolve_token() == ""
 
 
 def test_user_agent_header():
