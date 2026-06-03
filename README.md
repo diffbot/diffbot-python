@@ -18,10 +18,36 @@ pip install -e ".[dev]"
 ## Usage
 
 ### Authentication
-Set your Diffbot API token in your environment or .env.
+
+The CLI and the library can share a single credential. The token always has to be
+passed to the client explicitly, but `resolve_token()` gives you the same lookup the
+CLI uses, in this order:
+
+1. An explicit token passed to `resolve_token(token)`.
+2. The `DIFFBOT_API_TOKEN` environment variable.
+3. A `DIFFBOT_API_TOKEN=...` line in `~/.diffbot/credentials`.
+
+Set it once and it works for both the CLI and your scripts. Either export it:
 
 ```bash
 export DIFFBOT_API_TOKEN=<TOKEN>
+```
+
+…or write it to the shared credentials file (handy for keeping it out of your shell environment):
+
+```bash
+mkdir -p ~/.diffbot
+printf 'DIFFBOT_API_TOKEN=%s\n' '<TOKEN>' > ~/.diffbot/credentials
+chmod 600 ~/.diffbot/credentials
+```
+
+With either in place, resolve the token and pass it to the client:
+
+```python
+from diffbot import Diffbot, resolve_token
+
+db = Diffbot(token=resolve_token())  # from env var or ~/.diffbot/credentials
+data = db.extract("https://www.example.com")
 ```
 
 ### Extract structured content
@@ -166,7 +192,15 @@ asyncio.run(main())
 
 ## CLI
 
-This library also includes a CLI.
+This library also includes a CLI exposed as the `db` command.
+
+To make `db` available from anywhere, install it as an isolated tool with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv tool install .
+```
+
+This drops a `db` executable into `~/.local/bin` (ensure it is on your `PATH`). Use `--force` to reinstall or upgrade after changes, or `--editable` to have source edits take effect immediately. Alternatively, a plain `pip install .` (or `pip install -e .`) also installs the `db` entry point into the active environment.
 
 ```bash
 export DIFFBOT_API_TOKEN=your-token-here
@@ -189,7 +223,9 @@ Run the mock test suite:
 python -m pytest
 ```
 
-Run live integration tests against the real API (requires a valid token):
+Run live integration tests against the real API (requires a valid token).
+The token is resolved the same way as everywhere else — the `DIFFBOT_API_TOKEN`
+environment variable or `~/.diffbot/credentials`:
 ```bash
-DIFFBOT_TOKEN=your_token python -m pytest -m live
+DIFFBOT_API_TOKEN=your_token python -m pytest -m live
 ```

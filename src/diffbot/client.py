@@ -24,9 +24,13 @@ from .crawl import (
 from .kg import (
     dql as _dql,
     dql_async as _dql_async,
+    dql_fetch_ontology as _dql_fetch_ontology,
+    dql_fetch_ontology_async as _dql_fetch_ontology_async,
     dql_parallel as _dql_parallel,
+    dql_parallel_async as _dql_parallel_async,
     dql_refresh_ontology as _dql_refresh_ontology,
 )
+from .ontology import Ontology
 from .web_search import (
     WEB_SEARCH_BASE,
     web_search as _web_search,
@@ -48,8 +52,8 @@ class Diffbot:
     """Client for the Diffbot APIs.
 
     Example:
-        >>> from diffbot import Diffbot
-        >>> db = Diffbot(token=os.getenv("DIFFBOT_API_TOKEN"))
+        >>> from diffbot import Diffbot, resolve_token
+        >>> db = Diffbot(token=resolve_token())  # env var or ~/.diffbot/credentials
         >>> db.extract("https://example.com")
     """
 
@@ -154,6 +158,10 @@ class Diffbot:
     def dql_refresh_ontology(self, dest: pathlib.Path) -> None:
         """Download the Diffbot Knowledge Graph ontology and write it to dest."""
         _dql_refresh_ontology(self, dest)
+
+    def dql_fetch_ontology(self) -> Ontology:
+        """Download the ontology and return it as a queryable Ontology (no caching)."""
+        return _dql_fetch_ontology(self)
 
     def web_search(self, text: str, *, num_results: Optional[int] = None, max_tokens: Optional[int] = None) -> Dict[str, Any]:
         """Search the web via the Diffbot LLM web search API."""
@@ -271,6 +279,14 @@ class DiffbotAsync:
         (e.g. to retrieve CSV/export formats undecoded).
         """
         return await _dql_async(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw)
+
+    async def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Union[Dict[str, Any], bytes]]:
+        """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args."""
+        return await _dql_parallel_async(self, queries, workers=workers)
+
+    async def dql_fetch_ontology(self) -> Ontology:
+        """Download the ontology and return it as a queryable Ontology (no caching)."""
+        return await _dql_fetch_ontology_async(self)
 
     async def web_search(self, text: str, *, num_results: Optional[int] = None, max_tokens: Optional[int] = None) -> Dict[str, Any]:
         """Search the web via the Diffbot LLM web search API."""

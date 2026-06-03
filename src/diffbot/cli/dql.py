@@ -15,7 +15,9 @@ from rich.table import Table
 from diffbot import DiffbotError
 
 from . import ontology
-from ._common import get_client, resolve_token
+from diffbot import resolve_token
+
+from ._common import get_client
 
 
 class _DqlGroup(click.Group):
