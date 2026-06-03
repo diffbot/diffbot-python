@@ -18,7 +18,7 @@ def web_search(
     headers = {"Authorization": f"Bearer {client.token}"}
     params: Dict[str, Any] = {"text": text}
     if num_results is not None:
-        params["num_results"] = num_results
+        params["size"] = num_results
     if max_tokens is not None:
         params["maxTokens"] = max_tokens
     response = client._http.get(client.web_search_url, headers=headers, params=params)
@@ -36,7 +36,7 @@ async def web_search_async(
     headers = {"Authorization": f"Bearer {client.token}"}
     params: Dict[str, Any] = {"text": text}
     if num_results is not None:
-        params["num_results"] = num_results
+        params["size"] = num_results
     if max_tokens is not None:
         params["maxTokens"] = max_tokens
     response = await client._http.get(client.web_search_url, headers=headers, params=params)
