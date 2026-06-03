@@ -2,7 +2,12 @@
 diffbot - Python client library for the Diffbot APIs.
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    __version__ = _version("diffbot-python")
+except PackageNotFoundError:  # not installed (e.g. running from a source tree)
+    __version__ = "0.0.0"
 
 from ._auth import resolve_token
 from .client import Diffbot, DiffbotAsync
