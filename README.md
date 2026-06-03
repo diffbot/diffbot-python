@@ -6,7 +6,7 @@ Python client library for [Diffbot](https://www.diffbot.com) APIs.
 ## Installation
 
 ```bash
-pip install git+https://github.com/diffbot/diffbot-python.git
+python3 -m pip install diffbot-python
 ```
 
 Or, for local development:

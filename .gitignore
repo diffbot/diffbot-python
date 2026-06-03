@@ -3,6 +3,7 @@
 __pycache__
 .pytest_cache
 .env
+dist/
 
 # Claude
 .claude/settings.local.json

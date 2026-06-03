@@ -5,10 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "diffbot-python"
 version = "0.1.0"
-description = "Python client library for the Diffbot APIs"
+description = "Python client library for Diffbot APIs"
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search"
+]
 license = "MIT"
+license-files = ["LICEN[CS]E*"]
 authors = [
     { name = "Jerome Choo", email = "jerome@diffbot.com" },
     { name = "Mike Tung", email = "miket@diffbot.com" }
