@@ -105,15 +105,19 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+        # This job doesn't check out the repo, so gh can't infer it from a local
+        # git remote — pass --repo explicitly on every gh call.
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if gh release view "$tag" >/dev/null 2>&1; then
+          repo="${GITHUB_REPOSITORY}"
+          if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
             echo "Release $tag exists; uploading assets (clobbering)."
-            gh release upload "$tag" dist/* --clobber
+            gh release upload "$tag" dist/* --repo "$repo" --clobber
           else
             echo "Creating release $tag."
             gh release create "$tag" \
+              --repo "$repo" \
               --title "$tag" \
               --generate-notes \
               dist/*
