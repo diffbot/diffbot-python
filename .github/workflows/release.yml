@@ -37,6 +37,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fail fast if the tag doesn't match pyproject.toml's version, so the
+      # GitHub Release name can never disagree with the version the binaries
+      # report (db --version) or the one published to PyPI.
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          pkg=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          tag=${GITHUB_REF_NAME#v}
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::Tag v${tag} does not match pyproject.toml version ${pkg}. Bump pyproject.toml (e.g. 'make bump-patch') and re-tag."
+            exit 1
+          fi
+          echo "Tag and package version agree: ${pkg}"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
