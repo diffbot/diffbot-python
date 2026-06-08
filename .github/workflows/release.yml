@@ -11,10 +11,19 @@ on:
 permissions:
   contents: write
 
+# Re-pushing a tag (or re-dispatching) cancels an in-flight run for the same
+# ref so a stuck build can't pile up behind a newer attempt.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build ${{ matrix.target_os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    # Cap the wait so a capacity-starved runner fails this leg in minutes
+    # instead of hanging the release for GitHub's 24h queue limit.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -28,9 +37,9 @@ jobs:
           - runner: ubuntu-22.04-arm
             target_os: linux
             arch: aarch64
-          - runner: macos-13        # Intel
-            target_os: darwin
-            arch: x86_64
+          # macOS is Apple Silicon only: GitHub's Intel (macos-13) runners are
+          # being deprecated and their queue is unreliable. Intel-Mac users can
+          # still `pip install diffbot-python`.
           - runner: macos-14        # Apple Silicon
             target_os: darwin
             arch: aarch64

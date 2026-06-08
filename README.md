@@ -204,7 +204,7 @@ This drops a `db` executable into `~/.local/bin` (ensure it is on your `PATH`). 
 
 ### Standalone binary (no Python required)
 
-Every release also ships a self-contained `db` binary for Linux and macOS (x86_64 and aarch64/arm64) — no Python install needed. The installer detects your platform, verifies the SHA256 checksum, and installs (or upgrades) `db` into `~/.local/bin`:
+Every release also ships a self-contained `db` binary for Linux (x86_64 and aarch64) and macOS (Apple Silicon) — no Python install needed. The installer detects your platform, verifies the SHA256 checksum, and installs (or upgrades) `db` into `~/.local/bin`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/diffbot/diffbot-python/main/install.sh | sh
