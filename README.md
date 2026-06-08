@@ -202,6 +202,20 @@ uv tool install .
 
 This drops a `db` executable into `~/.local/bin` (ensure it is on your `PATH`). Use `--force` to reinstall or upgrade after changes, or `--editable` to have source edits take effect immediately. Alternatively, a plain `pip install .` (or `pip install -e .`) also installs the `db` entry point into the active environment.
 
+### Standalone binary (no Python required)
+
+Every release also ships a self-contained `db` binary for Linux and macOS (x86_64 and aarch64/arm64) — no Python install needed. The installer detects your platform, verifies the SHA256 checksum, and installs (or upgrades) `db` into `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/diffbot/diffbot-python/main/install.sh | sh
+```
+
+Pin a specific release or install location with flags (or the `DB_VERSION` / `DB_INSTALL_DIR` environment variables); re-running the installer upgrades an existing install in place:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/diffbot/diffbot-python/main/install.sh | sh -s -- --version v0.2.1 --bin-dir ~/bin
+```
+
 ```bash
 export DIFFBOT_API_TOKEN=your-token-here
 

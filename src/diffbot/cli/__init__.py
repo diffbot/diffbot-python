@@ -11,7 +11,7 @@ from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from datetime import datetime
 
-from diffbot import CrawlEventType, AuthError, ExtractionError, APIError
+from diffbot import __version__, CrawlEventType, AuthError, ExtractionError, APIError
 
 from ._common import get_client
 
@@ -28,6 +28,7 @@ def print_markdown(text):
 
 
 @click.group()
+@click.version_option(__version__, "-V", "--version", prog_name="db")
 def main():
     """
     Diffbot 🤖 Structure the world's knowledge.
