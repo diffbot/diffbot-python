@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffbot-python"
-version = "0.2.2"
+version = "0.2.3"
 description = "Python client library for Diffbot APIs"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 authors = [
@@ -30,6 +30,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
