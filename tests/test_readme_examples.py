@@ -1,10 +1,26 @@
 """Exercises the code patterns shown in the README Usage and Async Usage sections."""
+import json
+
 import httpx
 import pytest
 
-from diffbot import CrawlEventType, Diffbot, DiffbotAsync, resolve_token
+from diffbot import CrawlEventType, Diffbot, DiffbotAsync, json_schema_format, resolve_token
 
 SSE_PARIS = 'data: {"choices": [{"delta": {"content": "Paris"}}]}\n'
+
+CAPITAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "country": {"type": "string"},
+        "capital": {"type": "string"},
+    },
+    "required": ["country", "capital"],
+}
+SSE_CAPITAL_JSON = (
+    "data: "
+    + json.dumps({"choices": [{"delta": {"content": '{"country": "France", "capital": "Paris"}'}}]})
+    + "\n"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +45,48 @@ def test_readme_sync_ask():
     db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
     chunks = list(db.ask([{"role": "user", "content": "What's the capital of France?"}]))
     assert "Paris" in "".join(chunks)
+
+
+def test_readme_sync_ask_json_with_schema():
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["response_format"]["type"] == "json_schema"
+        assert body["response_format"]["json_schema"]["schema"] == CAPITAL_SCHEMA
+        return httpx.Response(200, text=SSE_CAPITAL_JSON)
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    answer = db.ask_json(
+        [{"role": "user", "content": "What's the capital of France?"}], CAPITAL_SCHEMA
+    )
+    assert answer["capital"] == "Paris"
+
+
+def test_readme_sync_ask_json_without_schema():
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Defaults to a permissive json_schema, never {"type": "json_object"}.
+        fmt = json.loads(request.content)["response_format"]
+        assert fmt["type"] == "json_schema"
+        assert fmt["json_schema"]["schema"] == {"type": "object"}
+        return httpx.Response(200, text=SSE_CAPITAL_JSON)
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    answer = db.ask_json([{"role": "user", "content": "What's the capital of France?"}])
+    assert answer["country"] == "France"
+
+
+def test_readme_sync_ask_streaming_with_response_format():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["response_format"]["type"] == "json_schema"
+        return httpx.Response(200, text=SSE_CAPITAL_JSON)
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    chunks = list(
+        db.ask(
+            [{"role": "user", "content": "What's the capital of France?"}],
+            response_format=json_schema_format(CAPITAL_SCHEMA),
+        )
+    )
+    assert json.loads("".join(chunks))["capital"] == "Paris"
 
 
 def test_readme_sync_crawl():
@@ -73,6 +131,20 @@ async def test_readme_async_ask():
     async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler)) as db:
         chunks = [chunk async for chunk in db.ask([{"role": "user", "content": "What's the capital of France?"}])]
     assert "Paris" in "".join(chunks)
+
+
+@pytest.mark.anyio
+async def test_readme_async_ask_json_with_schema():
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["response_format"]["json_schema"]["schema"] == CAPITAL_SCHEMA
+        return httpx.Response(200, text=SSE_CAPITAL_JSON)
+
+    async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler)) as db:
+        answer = await db.ask_json(
+            [{"role": "user", "content": "What's the capital of France?"}], CAPITAL_SCHEMA
+        )
+    assert answer["capital"] == "Paris"
 
 
 @pytest.mark.anyio

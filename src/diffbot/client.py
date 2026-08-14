@@ -9,7 +9,12 @@ import httpx
 from . import __version__
 from .errors import APIError, AuthError, RateLimitError, ValidationError
 from .extract import extract as _extract, extract_async as _extract_async
-from .ask import ask as _ask, ask_async as _ask_async
+from .ask import (
+    ask as _ask,
+    ask_async as _ask_async,
+    ask_json as _ask_json,
+    ask_json_async as _ask_json_async,
+)
 from .crawl import (
     CrawlEvent,
     crawl as _crawl,
@@ -112,9 +117,32 @@ class Diffbot:
         """Extract structured content from a URL. Returns the raw Diffbot API response."""
         return _extract(self, url, api=api, fmt=fmt)
 
-    def ask(self, messages: List[Dict[str, str]]) -> Iterator[str]:
-        """Stream a response from the Diffbot LLM RAG API."""
-        yield from _ask(self, messages)
+    def ask(
+        self,
+        messages: List[Dict[str, str]],
+        *,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[str]:
+        """Stream a response from the Diffbot LLM RAG API.
+
+        Pass ``response_format`` to constrain the output, e.g.
+        ``{"type": "json_object"}`` or ``diffbot.json_schema_format(schema)``.
+        """
+        yield from _ask(self, messages, response_format=response_format)
+
+    def ask_json(
+        self,
+        messages: List[Dict[str, str]],
+        schema: Optional[Dict[str, Any]] = None,
+        *,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Ask the Diffbot LLM and return the answer parsed as JSON.
+
+        With ``schema`` (a JSON Schema dict) the model is constrained to it by
+        grammar; without one it falls back to unconstrained JSON output.
+        """
+        return _ask_json(self, messages, schema, response_format=response_format)
 
     def crawl(self, site: str, **kwargs: Any) -> Iterator[CrawlEvent]:
         """Start a crawl job."""
@@ -239,10 +267,33 @@ class DiffbotAsync:
         """Extract structured content from a URL. Returns the raw Diffbot API response."""
         return await _extract_async(self, url, api=api, fmt=fmt)
 
-    async def ask(self, messages: List[Dict[str, str]]) -> AsyncIterator[str]:
-        """Stream a response from the Diffbot LLM RAG API."""
-        async for chunk in _ask_async(self, messages):
+    async def ask(
+        self,
+        messages: List[Dict[str, str]],
+        *,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> AsyncIterator[str]:
+        """Stream a response from the Diffbot LLM RAG API.
+
+        Pass ``response_format`` to constrain the output, e.g.
+        ``{"type": "json_object"}`` or ``diffbot.json_schema_format(schema)``.
+        """
+        async for chunk in _ask_async(self, messages, response_format=response_format):
             yield chunk
+
+    async def ask_json(
+        self,
+        messages: List[Dict[str, str]],
+        schema: Optional[Dict[str, Any]] = None,
+        *,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Ask the Diffbot LLM and return the answer parsed as JSON.
+
+        With ``schema`` (a JSON Schema dict) the model is constrained to it by
+        grammar; without one it falls back to unconstrained JSON output.
+        """
+        return await _ask_json_async(self, messages, schema, response_format=response_format)
 
     async def crawl(self, site: str, **kwargs: Any) -> AsyncIterator[CrawlEvent]:
         """Start a crawl job. Pass watch=True to poll until completion and yield URL_PROCESSED events."""

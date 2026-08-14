@@ -75,6 +75,42 @@ for chunk in db.ask([{"role": "user", "content": "What's the capital of France?"
     print(chunk, end="")
 ```
 
+### Structured output
+Pass a JSON Schema to constrain the answer. The model is held to the schema by a grammar during decoding, so the result parses reliably even though the answer is retrieved live from the web.
+
+```python
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+schema = {
+    "type": "object",
+    "properties": {
+        "country": {"type": "string"},
+        "capital": {"type": "string"},
+    },
+    "required": ["country", "capital"],
+}
+answer = db.ask_json([{"role": "user", "content": "What's the capital of France?"}], schema)
+print(answer["capital"])
+```
+
+Omit the schema to let the model choose the shape, or use `ask` with `response_format` to stream a constrained answer:
+
+```python
+from diffbot import Diffbot, json_schema_format
+
+db = Diffbot(token="YOUR_TOKEN")
+answer = db.ask_json([{"role": "user", "content": "What's the capital of France?"}])
+
+for chunk in db.ask(
+    [{"role": "user", "content": "What's the capital of France?"}],
+    response_format=json_schema_format(schema),
+):
+    print(chunk, end="")
+```
+
+> **Avoid `response_format={"type": "json_object"}`.** The endpoint accepts it, but applies no grammar to it — the RAG loop's internal tool call is itself a JSON object, so it can be returned as the final answer. This is reproducible whenever the request includes a system message. `ask_json` therefore defaults to a permissive JSON Schema instead, and raises `ValidationError` if it ever sees a tool call come back.
+
 ### Crawl a site for structured content
 ```python
 from diffbot import Diffbot
@@ -138,6 +174,30 @@ async def main():
     async with DiffbotAsync(token="YOUR_TOKEN") as db:
         async for chunk in db.ask([{"role": "user", "content": "What's the capital of France?"}]):
             print(chunk, end="")
+
+asyncio.run(main())
+```
+
+### Structured output
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+schema = {
+    "type": "object",
+    "properties": {
+        "country": {"type": "string"},
+        "capital": {"type": "string"},
+    },
+    "required": ["country", "capital"],
+}
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        answer = await db.ask_json(
+            [{"role": "user", "content": "What's the capital of France?"}], schema
+        )
+        print(answer["capital"])
 
 asyncio.run(main())
 ```
@@ -231,6 +291,8 @@ export DIFFBOT_API_TOKEN=your-token-here
 
 db extract https://www.example.com
 db ask "What's the capital of France?"
+db ask "What's the capital of France?" --json
+db ask "What's the capital of France?" --schema capital.json
 db crawl https://www.example.com --hops 1
 db crawl-list-jobs
 db crawl-delete-job crawl-1234567890

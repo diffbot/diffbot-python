@@ -11,7 +11,15 @@ from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from datetime import datetime
 
-from diffbot import __version__, CrawlEventType, AuthError, ExtractionError, APIError
+from diffbot import (
+    __version__,
+    CrawlEventType,
+    AuthError,
+    ExtractionError,
+    APIError,
+    ValidationError,
+    json_schema_format,
+)
 
 from ._common import get_client
 
@@ -86,10 +94,29 @@ def extract(url, output, fmt, api):
 @click.argument("prompt")
 @click.option("-o", "--output", type=click.Path(), help="Write output to file instead of stdout")
 @click.option("--json", "as_json", is_flag=True, help="Output from LLM as JSON")
-def ask(prompt: str, output: str = None, as_json: bool = False):
+@click.option(
+    "--schema",
+    "schema_path",
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON Schema file constraining the output (implies --json)",
+)
+def ask(prompt: str, output: str = None, as_json: bool = False, schema_path: str = None):
     """Ask a question to the Diffbot LLM"""
     db = get_client()
     stdin_content = sys.stdin.read() if not sys.stdin.isatty() else None
+
+    response_format = None
+    if schema_path:
+        as_json = True
+        try:
+            with open(schema_path) as f:
+                response_format = json_schema_format(json.load(f))
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: {schema_path} is not valid JSON: {e}", err=True)
+            raise click.Abort()
+
+    # Without --schema, response_format stays None and ask_json picks its own
+    # permissive default; --json alone must not become {"type": "json_object"}.
     interactive_mode = is_interactive and not output and not as_json
 
     messages = [
@@ -99,9 +126,6 @@ def ask(prompt: str, output: str = None, as_json: bool = False):
         },
         {"role": "user", "content": prompt},
     ]
-
-    if as_json:
-        messages[1]["content"] += "\nReturn the output as a JSON object. Do not include any other text outside of the JSON object."
 
     if stdin_content:
         messages[1]["content"] = f"<input>{stdin_content}</input>\n" + messages[1]["content"]
@@ -137,17 +161,20 @@ def ask(prompt: str, output: str = None, as_json: bool = False):
         else:
             response = ""
             if output:
-                for chunk in db.ask(messages):
-                    response += chunk
+                if as_json:
+                    response = json.dumps(
+                        db.ask_json(messages, response_format=response_format), indent=2
+                    )
+                else:
+                    for chunk in db.ask(messages):
+                        response += chunk
                 with open(output, "w") as f:
                     f.write(response)
                 click.echo(f"Output written to {output}")
             elif as_json:
-                buffer = ""
-                for chunk in db.ask(messages):
-                    buffer += chunk
-                buffer = buffer[buffer.find("{") : buffer.rfind("}") + 1]
-                sys.stdout.write(buffer)
+                sys.stdout.write(
+                    json.dumps(db.ask_json(messages, response_format=response_format), indent=2)
+                )
             else:
                 for chunk in db.ask(messages):
                     sys.stdout.write(chunk)
@@ -155,6 +182,9 @@ def ask(prompt: str, output: str = None, as_json: bool = False):
         console.print("\nExiting chat...")
     except AuthError:
         click.echo("Error: Invalid or unauthorized API token.", err=True)
+        raise click.Abort()
+    except ValidationError as e:
+        click.echo(f"Error: {e}", err=True)
         raise click.Abort()
     except APIError as e:
         click.echo(f"API error {e.status_code}: {e.message or e.body}", err=True)
