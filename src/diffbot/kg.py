@@ -51,7 +51,7 @@ def dql(
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
     params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = client._http.get(KG_DQL_ENDPOINT, params=params)
+    response = client._http.get(client.dql_url, params=params)
     client._raise_for_status(response)
     return response.content if raw else response.json()
 
@@ -69,7 +69,7 @@ async def dql_async(
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
     params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = await client._http.get(KG_DQL_ENDPOINT, params=params)
+    response = await client._http.get(client.dql_url, params=params)
     client._raise_for_status(response)
     return response.content if raw else response.json()
 
@@ -104,7 +104,7 @@ async def dql_parallel_async(
 
 
 def dql_refresh_ontology(client: "Diffbot", dest: pathlib.Path) -> None:
-    response = client._http.get(KG_ONTOLOGY_ENDPOINT)
+    response = client._http.get(client.ontology_url)
     client._raise_for_status(response)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(response.content)
@@ -116,13 +116,13 @@ def dql_fetch_ontology(client: "Diffbot") -> Ontology:
     Performs no caching — the caller decides whether and where to hold onto the
     result. Use :func:`dql_refresh_ontology` instead to persist raw bytes to disk.
     """
-    response = client._http.get(KG_ONTOLOGY_ENDPOINT)
+    response = client._http.get(client.ontology_url)
     client._raise_for_status(response)
     return Ontology.from_json(response.content)
 
 
 async def dql_fetch_ontology_async(client: "DiffbotAsync") -> Ontology:
     """Async variant of :func:`dql_fetch_ontology`."""
-    response = await client._http.get(KG_ONTOLOGY_ENDPOINT)
+    response = await client._http.get(client.ontology_url)
     client._raise_for_status(response)
     return Ontology.from_json(response.content)

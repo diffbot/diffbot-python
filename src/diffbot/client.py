@@ -27,6 +27,8 @@ from .crawl import (
     crawl_list_jobs_async as _crawl_list_jobs_async,
 )
 from .kg import (
+    KG_DQL_ENDPOINT,
+    KG_ONTOLOGY_ENDPOINT,
     dql as _dql,
     dql_async as _dql_async,
     dql_fetch_ontology as _dql_fetch_ontology,
@@ -72,6 +74,8 @@ class Diffbot:
         crawler_url: str = CRAWL_BASE,
         web_search_url: str = WEB_SEARCH_BASE,
         nlp_url: str = NLP_BASE,
+        dql_url: str = KG_DQL_ENDPOINT,
+        ontology_url: str = KG_ONTOLOGY_ENDPOINT,
         transport: Optional[httpx.BaseTransport] = None,
     ):
         if not token:
@@ -82,6 +86,8 @@ class Diffbot:
         self.crawler_url = crawler_url
         self.web_search_url = web_search_url
         self.nlp_url = nlp_url
+        self.dql_url = dql_url
+        self.ontology_url = ontology_url
         self._http = httpx.Client(
             timeout=timeout,
             headers={"User-Agent": f"diffbot-python/{__version__}"},
@@ -222,6 +228,8 @@ class DiffbotAsync:
         crawler_url: str = CRAWL_BASE,
         web_search_url: str = WEB_SEARCH_BASE,
         nlp_url: str = NLP_BASE,
+        dql_url: str = KG_DQL_ENDPOINT,
+        ontology_url: str = KG_ONTOLOGY_ENDPOINT,
         transport: Optional[httpx.AsyncBaseTransport] = None,
     ):
         if not token:
@@ -232,6 +240,8 @@ class DiffbotAsync:
         self.crawler_url = crawler_url
         self.web_search_url = web_search_url
         self.nlp_url = nlp_url
+        self.dql_url = dql_url
+        self.ontology_url = ontology_url
         self._http = httpx.AsyncClient(
             timeout=timeout,
             headers={"User-Agent": f"diffbot-python/{__version__}"},

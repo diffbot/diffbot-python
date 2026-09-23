@@ -58,6 +58,49 @@ db = Diffbot(token=resolve_token())  # from env var or ~/.diffbot/credentials
 data = db.extract("https://www.example.com")
 ```
 
+### Client configuration
+
+`Diffbot` and `DiffbotAsync` take the same keyword arguments — the client is the single
+place to configure the SDK.
+
+| Argument | Default | Used by |
+|----------|---------|---------|
+| `token` | — (required) | all |
+| `timeout` | `30.0` (seconds) | all |
+| `transport` | httpx default | all |
+| `analyze_url` | `https://api.diffbot.com/v3` | `extract` |
+| `crawler_url` | `https://api.diffbot.com/v3/crawl` | `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
+| `llm_url` | `https://llm.diffbot.com/rag/v1/chat/completions` | `ask`, `ask_json` |
+| `web_search_url` | `https://llm.diffbot.com/api/v1/web_search` | `web_search` |
+| `nlp_url` | `https://nl.diffbot.com/v1/` | `entities` |
+| `dql_url` | `https://kg.diffbot.com/kg/v3/dql` | `dql`, `dql_parallel` |
+| `ontology_url` | `https://kg.diffbot.com/kg/ontology` | `dql_fetch_ontology`, `dql_refresh_ontology` |
+
+```python
+from diffbot import Diffbot
+
+db = Diffbot(
+    token="YOUR_TOKEN",
+    timeout=60.0,
+    dql_url="http://localhost:8080/kg/v3/dql",
+)
+```
+
+`analyze_url` is a base the SDK appends `/{api}` to, and `crawler_url` is used as given
+for job management and with `/data` appended for crawl results. The rest are complete
+endpoints, used as given.
+
+Passing `transport` replaces the httpx transport, which is the hook for retries, proxies,
+or mocking in tests. `Diffbot` takes an `httpx.BaseTransport`, `DiffbotAsync` an
+`httpx.AsyncBaseTransport`:
+
+```python
+import httpx
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN", transport=httpx.HTTPTransport(retries=3))
+```
+
 ### Extract structured content
 ```python
 from diffbot import Diffbot

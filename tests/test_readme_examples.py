@@ -24,6 +24,31 @@ SSE_CAPITAL_JSON = (
 
 
 # ---------------------------------------------------------------------------
+# Client configuration
+# ---------------------------------------------------------------------------
+
+def test_readme_client_configuration_custom_dql_url():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).startswith("http://localhost:8080/kg/v3/dql")
+        return httpx.Response(200, json={"data": [{"entity": {"name": "Diffbot"}}]})
+
+    db = Diffbot(
+        token="YOUR_TOKEN",
+        timeout=60.0,
+        dql_url="http://localhost:8080/kg/v3/dql",
+        transport=httpx.MockTransport(handler),
+    )
+    results = db.dql('type:Organization name:"Diffbot"')
+    assert "data" in results
+
+
+def test_readme_client_configuration_transport():
+    transport = httpx.HTTPTransport(retries=3)
+    with Diffbot(token="YOUR_TOKEN", transport=transport) as db:
+        assert db._http._transport is transport
+
+
+# ---------------------------------------------------------------------------
 # Sync Usage
 # ---------------------------------------------------------------------------
 
