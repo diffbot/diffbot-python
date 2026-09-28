@@ -372,3 +372,7 @@ environment variable or `~/.diffbot/credentials`:
 ```bash
 DIFFBOT_API_TOKEN=your_token python -m pytest -m live
 ```
+
+## Acknowledgements
+
+Thanks to [@attilaolah](https://github.com/attilaolah), who published the original `diffbot` package in 2012 and looked after the name for 14 years before handing it over.
