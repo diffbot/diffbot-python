@@ -92,14 +92,16 @@ _release:
 
 # Smoke-test installs from each index in a throwaway venv.
 # `cd $$TMP` before running python so CWD doesn't shadow the venv install with this repo's source.
-# Deps live on prod PyPI, so TestPyPI install needs --extra-index-url.
+# Deps live on prod PyPI, so TestPyPI install needs --extra-index-url. uv checks
+# the extra index first, and prod PyPI also has these names (diffbot only with
+# yanked releases), so unsafe-best-match makes it consider TestPyPI too.
 verify-release-test:
 	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  TMP=$$(mktemp -d) && \
 	  uv venv --python 3.12 $$TMP/.venv >/dev/null 2>&1 && \
 	  uv pip install --quiet --python $$TMP/.venv/bin/python \
 	    --index-url https://test.pypi.org/simple/ \
-	    --extra-index-url https://pypi.org/simple/ \
+	    --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match \
 	    "$(PKG)==$$VERSION" && \
 	  (cd $$TMP && $$TMP/.venv/bin/python -c "import diffbot; print('TestPyPI install OK:', diffbot.__version__)") && \
 	  rm -rf $$TMP
