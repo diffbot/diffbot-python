@@ -39,7 +39,7 @@ jobs:
             arch: aarch64
           # macOS is Apple Silicon only: GitHub's Intel (macos-13) runners are
           # being deprecated and their queue is unreliable. Intel-Mac users can
-          # still `pip install diffbot-python`.
+          # still `pip install diffbot`.
           - runner: macos-14        # Apple Silicon
             target_os: darwin
             arch: aarch64
