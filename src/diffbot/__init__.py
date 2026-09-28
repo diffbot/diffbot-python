@@ -13,7 +13,7 @@ def _installed_version(dist: str):
 
 
 # The distribution was renamed from diffbot-python to diffbot. The final
-# diffbot-python release ships this same code (see legacy/diffbot-python), so
+# diffbot-python release ships this same code (tag legacy-diffbot-python-v0.3.0), so
 # fall back to its version when that's what is installed.
 _legacy_version = _installed_version("diffbot-python")
 # "0.0.0" when not installed (e.g. running from a source tree).

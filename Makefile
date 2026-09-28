@@ -1,4 +1,4 @@
-.PHONY: test test-live build build-legacy release-legacy release-test-legacy clean bump-patch bump-minor bump-major set-token-pypi set-token-testpypi release-test release _release-test _release verify-release-test verify-release
+.PHONY: test test-live build clean bump-patch bump-minor bump-major set-token-pypi set-token-testpypi release-test release _release-test _release verify-release-test verify-release
 
 test:
 	uv run --extra dev pytest
@@ -9,23 +9,14 @@ test-live:
 clean:
 	rm -rf dist build *.egg-info
 
-# Distribution to publish/verify. The legacy targets override this with
-# PKG=diffbot-python to ship the final diffbot-python release.
+# Distribution to publish/verify. Override on the command line to target
+# another package, e.g. `make verify-release PKG=... PYPROJECT=...`.
 PKG ?= diffbot
 PYPROJECT ?= pyproject.toml
 
 build: clean
 	uv build
 
-# Build the final diffbot-python release into dist/: today's src/diffbot under
-# the old name (see legacy/diffbot-python). Staged in build/ because the package
-# code lives outside that directory.
-build-legacy: clean
-	mkdir -p build
-	cp -R legacy/diffbot-python build/legacy
-	cp -R src build/legacy/src
-	find build/legacy -name __pycache__ -prune -exec rm -rf {} +
-	uv build build/legacy --out-dir dist
 
 # Version bumps: edits pyproject.toml in place and prints old => new.
 bump-patch:
@@ -113,11 +104,3 @@ verify-release:
 	  uv pip install --quiet --python $$TMP/.venv/bin/python "$(PKG)==$$VERSION" && \
 	  (cd $$TMP && $$TMP/.venv/bin/python -c "import diffbot; print('PyPI install OK:', diffbot.__version__)") && \
 	  rm -rf $$TMP
-
-# Publish the final diffbot-python release. Reuses the targets above with the
-# legacy package's name/pyproject; `make build` is swapped for build-legacy.
-release-test-legacy: build-legacy
-	@$(MAKE) --no-print-directory _release-test PKG=diffbot-python PYPROJECT=legacy/diffbot-python/pyproject.toml
-
-release-legacy: build-legacy
-	@$(MAKE) --no-print-directory _release PKG=diffbot-python PYPROJECT=legacy/diffbot-python/pyproject.toml
