@@ -1,4 +1,4 @@
-.PHONY: test test-live build clean bump-patch bump-minor bump-major set-token-pypi set-token-testpypi release-test release verify-release-test verify-release
+.PHONY: test test-live build build-legacy release-legacy release-test-legacy clean bump-patch bump-minor bump-major set-token-pypi set-token-testpypi release-test release _release-test _release verify-release-test verify-release
 
 test:
 	uv run --extra dev pytest
@@ -9,8 +9,23 @@ test-live:
 clean:
 	rm -rf dist build *.egg-info
 
+# Distribution to publish/verify. The legacy targets override this with
+# PKG=diffbot-python to ship the final diffbot-python release.
+PKG ?= diffbot
+PYPROJECT ?= pyproject.toml
+
 build: clean
 	uv build
+
+# Build the final diffbot-python release into dist/: today's src/diffbot under
+# the old name (see legacy/diffbot-python). Staged in build/ because the package
+# code lives outside that directory.
+build-legacy: clean
+	mkdir -p build
+	cp -R legacy/diffbot-python build/legacy
+	cp -R src build/legacy/src
+	find build/legacy -name __pycache__ -prune -exec rm -rf {} +
+	uv build build/legacy --out-dir dist
 
 # Version bumps: edits pyproject.toml in place and prints old => new.
 bump-patch:
@@ -39,11 +54,13 @@ set-token-testpypi:
 
 # Publish to TestPyPI. Token comes from macOS Keychain (service: pypi-token-testpypi).
 # The `@` on the recipe lines hides the actual command so the token never appears in output.
-release-test: build
-	@VERSION=$$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2) && \
-	  STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://test.pypi.org/pypi/diffbot-python/$$VERSION/json") && \
+release-test: build _release-test
+
+_release-test:
+	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
+	  STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://test.pypi.org/pypi/$(PKG)/$$VERSION/json") && \
 	  if [ "$$STATUS" = "200" ]; then \
-	    echo "ERROR: diffbot-python $$VERSION is already on TestPyPI. Bump the version in pyproject.toml."; \
+	    echo "ERROR: $(PKG) $$VERSION is already on TestPyPI. Bump the version in pyproject.toml."; \
 	    exit 1; \
 	  fi
 	@TOKEN=$$(security find-generic-password -s pypi-token-testpypi -w 2>/dev/null) && \
@@ -54,14 +71,16 @@ release-test: build
 	  UV_PUBLISH_TOKEN="$$TOKEN" uv publish --publish-url https://test.pypi.org/legacy/
 
 # Publish to real PyPI. Confirmation gate before upload (PyPI does not allow re-uploads).
-release: build
-	@VERSION=$$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2) && \
-	  STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/diffbot-python/$$VERSION/json") && \
+release: build _release
+
+_release:
+	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
+	  STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/$(PKG)/$$VERSION/json") && \
 	  if [ "$$STATUS" = "200" ]; then \
-	    echo "ERROR: diffbot-python $$VERSION is already on PyPI. Bump the version in pyproject.toml."; \
+	    echo "ERROR: $(PKG) $$VERSION is already on PyPI. Bump the version in pyproject.toml."; \
 	    exit 1; \
 	  fi && \
-	  echo "About to publish diffbot-python $$VERSION to PyPI. This cannot be undone." && \
+	  echo "About to publish $(PKG) $$VERSION to PyPI. This cannot be undone." && \
 	  read -p "Type the version to confirm: " CONFIRM && \
 	  [ "$$CONFIRM" = "$$VERSION" ] || { echo "Aborted."; exit 1; }
 	@TOKEN=$$(security find-generic-password -s pypi-token-pypi -w 2>/dev/null) && \
@@ -75,20 +94,28 @@ release: build
 # `cd $$TMP` before running python so CWD doesn't shadow the venv install with this repo's source.
 # Deps live on prod PyPI, so TestPyPI install needs --extra-index-url.
 verify-release-test:
-	@VERSION=$$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2) && \
+	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  TMP=$$(mktemp -d) && \
 	  uv venv --python 3.12 $$TMP/.venv >/dev/null 2>&1 && \
 	  uv pip install --quiet --python $$TMP/.venv/bin/python \
 	    --index-url https://test.pypi.org/simple/ \
 	    --extra-index-url https://pypi.org/simple/ \
-	    "diffbot-python==$$VERSION" && \
+	    "$(PKG)==$$VERSION" && \
 	  (cd $$TMP && $$TMP/.venv/bin/python -c "import diffbot; print('TestPyPI install OK:', diffbot.__version__)") && \
 	  rm -rf $$TMP
 
 verify-release:
-	@VERSION=$$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2) && \
+	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  TMP=$$(mktemp -d) && \
 	  uv venv --python 3.12 $$TMP/.venv >/dev/null 2>&1 && \
-	  uv pip install --quiet --python $$TMP/.venv/bin/python "diffbot-python==$$VERSION" && \
+	  uv pip install --quiet --python $$TMP/.venv/bin/python "$(PKG)==$$VERSION" && \
 	  (cd $$TMP && $$TMP/.venv/bin/python -c "import diffbot; print('PyPI install OK:', diffbot.__version__)") && \
 	  rm -rf $$TMP
+
+# Publish the final diffbot-python release. Reuses the targets above with the
+# legacy package's name/pyproject; `make build` is swapped for build-legacy.
+release-test-legacy: build-legacy
+	@$(MAKE) --no-print-directory _release-test PKG=diffbot-python PYPROJECT=legacy/diffbot-python/pyproject.toml
+
+release-legacy: build-legacy
+	@$(MAKE) --no-print-directory _release PKG=diffbot-python PYPROJECT=legacy/diffbot-python/pyproject.toml

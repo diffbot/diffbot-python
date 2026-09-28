@@ -111,7 +111,7 @@ log "Running PyInstaller"
   --workpath "$WORK_DIR" \
   --specpath "$WORK_DIR" \
   --collect-submodules diffbot \
-  --copy-metadata diffbot-python \
+  --copy-metadata diffbot \
   "$ENTRY_SCRIPT" >&2
 
 BINARY="${OUTPUT_DIR}/${ASSET}"

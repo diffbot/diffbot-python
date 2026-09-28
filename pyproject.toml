@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "diffbot-python"
-version = "0.2.3"
+name = "diffbot"
+version = "3.0.0"
 description = "Python client library for Diffbot APIs"
 readme = "README.md"
 requires-python = ">=3.9"

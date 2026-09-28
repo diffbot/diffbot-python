@@ -1,5 +1,9 @@
 # Diffbot Python Library
 
+> ⚠️ **The PyPI package is now [`diffbot`](https://pypi.org/project/diffbot/)** (`pip install diffbot`).
+> `diffbot-python` is legacy and its final release (0.3.0) will never be updated.
+> See [Installation](#installation) to migrate.
+
 Python client library for [Diffbot](https://www.diffbot.com) APIs.
 
 
@@ -14,8 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/diffbot/diffbot-python/main/install
 If you prefer, the full Python library can also be installed with pip:
 
 ```bash
-python3 -m pip install diffbot-python
+python3 -m pip install diffbot
 ```
+
+> This package was formerly published as `diffbot-python`, whose final release (0.3.0) gets no further updates.
+> If you're upgrading from it, run `pip uninstall diffbot-python && pip install --force-reinstall diffbot`
+> and replace `diffbot-python` with `diffbot` in your requirements.
 
 For local development:
 

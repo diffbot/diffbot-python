@@ -127,7 +127,7 @@ if [ -e "$target" ]; then
     info "but your Python package manager still treats the file as its own — a later"
     info "'pip install --upgrade' / 'uv tool upgrade' could clobber it again, and an"
     info "uninstall would delete it. To avoid the conflict, remove the managed copy first:"
-    info "  pip uninstall diffbot-python    # or: uv tool uninstall diffbot-python"
+    info "  pip uninstall diffbot           # or: uv tool uninstall diffbot (older installs: diffbot-python)"
     info ""
     info "Proceeding to overwrite ${target}..."
   else
@@ -162,8 +162,8 @@ if [ -n "$existing" ] && [ "$existing" != "$target" ]; then
   info "Note: another '${BIN_NAME}' is first on your PATH and will take precedence:"
   info "  ${existing}"
   if is_python_console_script "$existing"; then
-    info "  (it looks pip/uv-managed; remove it with 'pip uninstall diffbot-python'"
-    info "   or 'uv tool uninstall diffbot-python', or put ${BIN_DIR} earlier on PATH.)"
+    info "  (it looks pip/uv-managed; remove it with 'pip uninstall diffbot'"
+    info "   or 'uv tool uninstall diffbot' (older installs: diffbot-python), or put ${BIN_DIR} earlier on PATH.)"
   fi
 fi
 
