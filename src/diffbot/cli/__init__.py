@@ -359,16 +359,17 @@ def _strip_markdown(text: str) -> str:
 @click.option("-n", "--num-results", type=int, default=None, help="Number of results to return")
 @click.option("-m", "--max-tokens", type=int, default=None, help="Limit total response tokens (for agentic use cases)")
 @click.option("-f", "--format", "fmt", type=click.Choice(["list", "json", "text"]), default="list", help="Output format (text is plain/agent-friendly)")
-def web_search(query: str, num_results, max_tokens, fmt: str):
+@click.option("-s", "--snippet-length", type=click.Choice(["short", "medium", "long", "full"], case_sensitive=False), default=None, help="How much of each page's matching content to return (default: long). short keeps a result to ~1-1.5 KB; full returns the whole stored page, for url: lookups")
+def web_search(query: str, num_results, max_tokens, fmt: str, snippet_length):
     """Search the web using the Diffbot LLM web search API."""
     db = get_client()
     try:
         if is_interactive:
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
                 progress.add_task(description="Searching...", total=None)
-                data = db.web_search(query, num_results=num_results, max_tokens=max_tokens)
+                data = db.web_search(query, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
         else:
-            data = db.web_search(query, num_results=num_results, max_tokens=max_tokens)
+            data = db.web_search(query, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
         if fmt == "json":
             sys.stdout.write(json.dumps(data, indent=2))

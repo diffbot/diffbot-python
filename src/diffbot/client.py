@@ -197,9 +197,22 @@ class Diffbot:
         """Download the ontology and return it as a queryable Ontology (no caching)."""
         return _dql_fetch_ontology(self)
 
-    def web_search(self, text: str, *, num_results: Optional[int] = None, max_tokens: Optional[int] = None) -> Dict[str, Any]:
-        """Search the web via the Diffbot LLM web search API."""
-        return _web_search(self, text, num_results=num_results, max_tokens=max_tokens)
+    def web_search(
+        self,
+        text: str,
+        *,
+        num_results: Optional[int] = None,
+        max_tokens: Optional[int] = None,
+        snippet_length: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Search the web via the Diffbot LLM web search API.
+
+        snippet_length: "short", "medium", "long" or "full" — how much of each
+        page's matching content to return. Omit for the API default (long).
+        "full" returns the whole stored page (reranking is disabled for it);
+        use it with a url:<URL> query.
+        """
+        return _web_search(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
     def entities(self, text: str, *, lang: str = "auto") -> Dict[str, Any]:
         """Identify and resolve entities and sentiment in text using the Diffbot NLP API.
@@ -349,9 +362,22 @@ class DiffbotAsync:
         """Download the ontology and return it as a queryable Ontology (no caching)."""
         return await _dql_fetch_ontology_async(self)
 
-    async def web_search(self, text: str, *, num_results: Optional[int] = None, max_tokens: Optional[int] = None) -> Dict[str, Any]:
-        """Search the web via the Diffbot LLM web search API."""
-        return await _web_search_async(self, text, num_results=num_results, max_tokens=max_tokens)
+    async def web_search(
+        self,
+        text: str,
+        *,
+        num_results: Optional[int] = None,
+        max_tokens: Optional[int] = None,
+        snippet_length: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Search the web via the Diffbot LLM web search API.
+
+        snippet_length: "short", "medium", "long" or "full" — how much of each
+        page's matching content to return. Omit for the API default (long).
+        "full" returns the whole stored page (reranking is disabled for it);
+        use it with a url:<URL> query.
+        """
+        return await _web_search_async(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
     async def entities(self, text: str, *, lang: str = "auto") -> Dict[str, Any]:
         """Identify and resolve entities and sentiment in text using the Diffbot NLP API.

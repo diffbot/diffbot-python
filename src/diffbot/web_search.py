@@ -14,6 +14,7 @@ def web_search(
     *,
     num_results: Optional[int] = None,
     max_tokens: Optional[int] = None,
+    snippet_length: Optional[str] = None,
 ) -> Dict[str, Any]:
     headers = {"Authorization": f"Bearer {client.token}"}
     params: Dict[str, Any] = {"text": text}
@@ -21,6 +22,11 @@ def web_search(
         params["size"] = num_results
     if max_tokens is not None:
         params["maxTokens"] = max_tokens
+    if snippet_length is not None:
+        params["snippetLength"] = snippet_length.upper()
+        if params["snippetLength"] == "FULL":
+            # the reranker always chunks; only the unranked path returns the stored page
+            params["rerank"] = "none"
     response = client._http.get(client.web_search_url, headers=headers, params=params)
     client._raise_for_status(response)
     return response.json()
@@ -32,6 +38,7 @@ async def web_search_async(
     *,
     num_results: Optional[int] = None,
     max_tokens: Optional[int] = None,
+    snippet_length: Optional[str] = None,
 ) -> Dict[str, Any]:
     headers = {"Authorization": f"Bearer {client.token}"}
     params: Dict[str, Any] = {"text": text}
@@ -39,6 +46,11 @@ async def web_search_async(
         params["size"] = num_results
     if max_tokens is not None:
         params["maxTokens"] = max_tokens
+    if snippet_length is not None:
+        params["snippetLength"] = snippet_length.upper()
+        if params["snippetLength"] == "FULL":
+            # the reranker always chunks; only the unranked path returns the stored page
+            params["rerank"] = "none"
     response = await client._http.get(client.web_search_url, headers=headers, params=params)
     client._raise_for_status(response)
     return response.json()

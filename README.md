@@ -188,6 +188,13 @@ results = db.web_search("diffbot knowledge graph")
 for r in results["search_results"]:
     print(r["score"], r["title"], r["pageUrl"])
     print(r["content"])
+
+# snippet_length controls how much of each page comes back in "content":
+# "short" (~1-1.5 KB per result), "medium", "long" (default), or "full"
+results = db.web_search("diffbot knowledge graph", num_results=5, snippet_length="short")
+
+# "full" with a url: query returns the whole stored page
+page = db.web_search("url:https://en.wikipedia.org/wiki/Knowledge_graph", snippet_length="full")
 ```
 
 ### Entities (NLP)
@@ -349,6 +356,8 @@ db crawl-list-jobs
 db crawl-delete-job crawl-1234567890
 db web-search "diffbot knowledge graph"
 db web-search "diffbot knowledge graph" -n 5 -f json
+db web-search "diffbot knowledge graph" -n 5 -s short
+db web-search "url:https://en.wikipedia.org/wiki/Knowledge_graph" -s full -f json
 db entities "Apple CEO Tim Cook announced record quarterly earnings."
 db entities "Apple CEO Tim Cook announced record quarterly earnings." -f dql
 ```
