@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from diffbot import CrawlEventType, Diffbot, DiffbotAsync, json_schema_format, resolve_token
+from diffbot import CrawlEventType, Diffbot, DiffbotAsync, RetryPolicy, json_schema_format, resolve_token
 
 SSE_PARIS = 'data: {"choices": [{"delta": {"content": "Paris"}}]}\n'
 
@@ -46,6 +46,24 @@ def test_readme_client_configuration_transport():
     transport = httpx.HTTPTransport(retries=3)
     with Diffbot(token="YOUR_TOKEN", transport=transport) as db:
         assert db._http._transport is transport
+
+
+def test_readme_client_configuration_api_base():
+    staging = Diffbot(token="YOUR_TOKEN", api_base="https://staging.example.com")
+    assert staging.analyze_url == "https://staging.example.com/v3"
+    assert staging.crawler_url == "https://staging.example.com/v3/crawl"
+
+
+def test_readme_client_configuration_retry():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    db = Diffbot(token="YOUR_TOKEN", retry=False, transport=httpx.MockTransport(handler))
+    with pytest.raises(Exception):
+        db.extract("https://www.example.com")
+
+    tuned = Diffbot(token="YOUR_TOKEN", retry=RetryPolicy(max_attempts=5))
+    assert tuned._retry_policy.max_attempts == 5
 
 
 # ---------------------------------------------------------------------------

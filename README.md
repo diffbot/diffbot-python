@@ -75,14 +75,19 @@ place to configure the SDK.
 |----------|---------|---------|
 | `token` | — (required) | all |
 | `timeout` | `30.0` (seconds) | all |
+| `retry` | on, 3 attempts | all; `False` disables, or pass a `RetryPolicy` to tune it |
 | `transport` | httpx default | all |
-| `analyze_url` | `https://api.diffbot.com/v3` | `extract` |
-| `crawler_url` | `https://api.diffbot.com/v3/crawl` | `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
-| `llm_url` | `https://llm.diffbot.com/rag/v1/chat/completions` | `ask`, `ask_json` |
-| `web_search_url` | `https://llm.diffbot.com/api/v1/web_search` | `web_search` |
-| `nlp_url` | `https://nl.diffbot.com/v1/` | `entities` |
-| `dql_url` | `https://kg.diffbot.com/kg/v3/dql` | `dql`, `dql_parallel` |
-| `ontology_url` | `https://kg.diffbot.com/kg/ontology` | `dql_fetch_ontology`, `dql_refresh_ontology` |
+| `api_base` | `https://api.diffbot.com` | `extract`, `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
+| `kg_base` | `https://kg.diffbot.com` | `dql`, `dql_parallel`, `dql_fetch_ontology`, `dql_refresh_ontology` |
+| `llm_base` | `https://llm.diffbot.com` | `ask`, `ask_json`, `web_search` |
+| `nlp_base` | `https://nl.diffbot.com` | `entities` |
+| `analyze_url` | derived from `api_base` | `extract` |
+| `crawler_url` | derived from `api_base` | `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
+| `llm_url` | derived from `llm_base` | `ask`, `ask_json` |
+| `web_search_url` | derived from `llm_base` | `web_search` |
+| `nlp_url` | derived from `nlp_base` | `entities` |
+| `dql_url` | derived from `kg_base` | `dql`, `dql_parallel` |
+| `ontology_url` | derived from `kg_base` | `dql_fetch_ontology`, `dql_refresh_ontology` |
 
 ```python
 from diffbot import Diffbot
@@ -94,12 +99,35 @@ db = Diffbot(
 )
 ```
 
-`analyze_url` is a base the SDK appends `/{api}` to, and `crawler_url` is used as given
-for job management and with `/data` appended for crawl results. The rest are complete
-endpoints, used as given.
+Point the whole SDK at a staging environment with one option instead of one per endpoint:
 
-Passing `transport` replaces the httpx transport, which is the hook for retries, proxies,
-or mocking in tests. `Diffbot` takes an `httpx.BaseTransport`, `DiffbotAsync` an
+```python
+staging = Diffbot(token="YOUR_TOKEN", api_base="https://staging.example.com")
+```
+
+`api_base`/`kg_base`/`llm_base`/`nlp_base` set the host for every endpoint on that host
+at once. The older per-endpoint options (`analyze_url`, `crawler_url`, `llm_url`,
+`web_search_url`, `nlp_url`, `dql_url`, `ontology_url`) still work and win over the
+matching base when both are set; `analyze_url` is a base the SDK appends `/{api}` to,
+`crawler_url` is used as given for job management and with `/data` appended for crawl
+results, and the rest are complete endpoints used as given.
+
+Requests retry `429` and `5xx` responses (and connection errors) with backoff and
+jitter, honoring a `Retry-After` header, by default. Disable retries or tune the policy:
+
+```python
+from diffbot import Diffbot, RetryPolicy
+
+db = Diffbot(token="YOUR_TOKEN", retry=False)
+# or: retry=RetryPolicy(max_attempts=5)
+```
+
+The transport also accepts a per-call `retryable=False` escape hatch; the SDK uses it
+internally for `crawl_delete_job`, a GET-shaped mutation that must not be retried
+blindly.
+
+Passing `transport` replaces the httpx transport, which is the hook for proxies or
+mocking in tests. `Diffbot` takes an `httpx.BaseTransport`, `DiffbotAsync` an
 `httpx.AsyncBaseTransport`:
 
 ```python
