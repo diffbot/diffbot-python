@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
 
-from .errors import APIError
+from .errors import JobError
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -58,8 +58,7 @@ def crawl(
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
     )
-    response = client._http.get(client.crawler_url, params=params)
-    client._raise_for_status(response)
+    client.request("GET", client.crawler_url, params=params)
 
     yield CrawlEvent(
         event_type=CrawlEventType.JOB_CREATED,
@@ -73,23 +72,23 @@ def crawl(
     seen_urls: set = set()
 
     while True:
-        status_response = client._http.get(
+        status_response = client.request(
+            "GET",
             client.crawler_url,
             params={"token": client.token, "name": job_name},
         )
-        client._raise_for_status(status_response)
         jobs = status_response.json().get("jobs", [])
         if not jobs:
             break
         job_status = jobs[0].get("jobStatus", {})
         status_code = job_status.get("status", 0)
 
-        urls_response = client._http.get(
+        urls_response = client.request(
+            "GET",
             f"{client.crawler_url}/data",
             params={"token": client.token, "name": job_name, "type": "urls"},
             follow_redirects=True,
         )
-        client._raise_for_status(urls_response)
         if urls_response.content:
             for event in _parse_url_csv(urls_response.text, seen_urls):
                 yield event
@@ -97,7 +96,7 @@ def crawl(
         if status_code not in (0, 7):
             message = job_status.get("message", "")
             if "fail" in message.lower() or "error" in message.lower():
-                raise APIError(500, f"Crawler job failed: {message}")
+                raise JobError(job_name, f"Crawler job failed: {message}")
             break
 
         time.sleep(poll_interval)
@@ -177,8 +176,7 @@ async def crawl_async(
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
     )
-    response = await client._http.get(client.crawler_url, params=params)
-    client._raise_for_status(response)
+    await client.request("GET", client.crawler_url, params=params)
 
     yield CrawlEvent(
         event_type=CrawlEventType.JOB_CREATED,
@@ -192,23 +190,23 @@ async def crawl_async(
     seen_urls: set = set()
 
     while True:
-        status_response = await client._http.get(
+        status_response = await client.request(
+            "GET",
             client.crawler_url,
             params={"token": client.token, "name": job_name},
         )
-        client._raise_for_status(status_response)
         jobs = status_response.json().get("jobs", [])
         if not jobs:
             break
         job_status = jobs[0].get("jobStatus", {})
         status_code = job_status.get("status", 0)
 
-        urls_response = await client._http.get(
+        urls_response = await client.request(
+            "GET",
             f"{client.crawler_url}/data",
             params={"token": client.token, "name": job_name, "type": "urls"},
             follow_redirects=True,
         )
-        client._raise_for_status(urls_response)
         if urls_response.content:
             for event in _parse_url_csv(urls_response.text, seen_urls):
                 yield event
@@ -216,55 +214,57 @@ async def crawl_async(
         if status_code not in (0, 7):
             message = job_status.get("message", "")
             if "fail" in message.lower() or "error" in message.lower():
-                raise APIError(500, f"Crawler job failed: {message}")
+                raise JobError(job_name, f"Crawler job failed: {message}")
             break
 
         await asyncio.sleep(poll_interval)
 
 
 async def crawl_list_jobs_async(client: "DiffbotAsync") -> List[Dict[str, Any]]:
-    response = await client._http.get(client.crawler_url, params={"token": client.token})
-    client._raise_for_status(response)
+    response = await client.request("GET", client.crawler_url, params={"token": client.token})
     return response.json().get("jobs", [])
 
 
 async def crawl_get_job_async(client: "DiffbotAsync", job_name: str) -> Dict[str, Any]:
-    response = await client._http.get(
+    response = await client.request(
+        "GET",
         client.crawler_url,
         params={"token": client.token, "name": job_name},
     )
-    client._raise_for_status(response)
     jobs = response.json().get("jobs", [])
     return jobs[0] if jobs else {}
 
 
 async def crawl_delete_job_async(client: "DiffbotAsync", job_name: str) -> None:
-    response = await client._http.get(
+    # A GET-shaped mutation: retrying it blindly risks issuing the delete twice.
+    await client.request(
+        "GET",
         client.crawler_url,
         params={"token": client.token, "name": job_name, "delete": 1},
+        retryable=False,
     )
-    client._raise_for_status(response)
 
 
 def crawl_list_jobs(client: "Diffbot") -> List[Dict[str, Any]]:
-    response = client._http.get(client.crawler_url, params={"token": client.token})
-    client._raise_for_status(response)
+    response = client.request("GET", client.crawler_url, params={"token": client.token})
     return response.json().get("jobs", [])
 
 
 def crawl_get_job(client: "Diffbot", job_name: str) -> Dict[str, Any]:
-    response = client._http.get(
+    response = client.request(
+        "GET",
         client.crawler_url,
         params={"token": client.token, "name": job_name},
     )
-    client._raise_for_status(response)
     jobs = response.json().get("jobs", [])
     return jobs[0] if jobs else {}
 
 
 def crawl_delete_job(client: "Diffbot", job_name: str) -> None:
-    response = client._http.get(
+    # A GET-shaped mutation: retrying it blindly risks issuing the delete twice.
+    client.request(
+        "GET",
         client.crawler_url,
         params={"token": client.token, "name": job_name, "delete": 1},
+        retryable=False,
     )
-    client._raise_for_status(response)

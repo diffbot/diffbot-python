@@ -1,8 +1,9 @@
 import json
 
+import httpx
 import pytest
 
-from diffbot import DiffbotAsync, json_schema_format
+from diffbot import AuthError, Diffbot, DiffbotAsync, RateLimitError, json_schema_format
 from diffbot.ask import (
     ANY_OBJECT_SCHEMA,
     _build_payload,
@@ -190,6 +191,97 @@ def test_leak_guard_allows_name_without_arguments():
 def test_leak_guard_passes_lists():
     answer = [{"city": "NYC"}]
     assert _check_tool_call_leak(answer) is answer
+
+
+"""
+Streaming error path
+
+ask() opens a streaming response, so reading the error body must happen before
+raising -- otherwise httpx raises ResponseNotRead instead of AuthError/RateLimitError.
+httpx.MockTransport with content= pre-fills the body, which masks this bug (the body
+looks "already read"), so these use a real SyncByteStream/AsyncByteStream that defers
+content the way a genuine chunked network response would.
+"""
+
+
+class _SyncSlowStream(httpx.SyncByteStream):
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def __iter__(self):
+        for chunk in self._chunks:
+            yield chunk
+
+    def close(self):
+        pass
+
+
+class _AsyncSlowStream(httpx.AsyncByteStream):
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def __aiter__(self):
+        for chunk in self._chunks:
+            yield chunk
+
+    async def aclose(self):
+        pass
+
+
+def test_ask_streaming_401_raises_auth_error_with_message():
+    body = b'{"message": "Unauthorized. Incorrect token.", "requestId": "abc"}'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, stream=_SyncSlowStream([body]))
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    with pytest.raises(AuthError) as exc_info:
+        list(db.ask([{"role": "user", "content": "hi"}]))
+    assert exc_info.value.message == "Unauthorized. Incorrect token."
+    assert exc_info.value.request_id == "abc"
+
+
+def test_ask_streaming_429_raises_rate_limit_error_with_retry_after():
+    body = b'{"message": "slow down"}'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"retry-after": "5"}, stream=_SyncSlowStream([body]))
+
+    db = Diffbot(token="test-token", retry=False, transport=httpx.MockTransport(handler))
+    with pytest.raises(RateLimitError) as exc_info:
+        list(db.ask([{"role": "user", "content": "hi"}]))
+    assert exc_info.value.retry_after == "5"
+    assert exc_info.value.message == "slow down"
+
+
+@pytest.mark.anyio
+async def test_async_ask_streaming_401_raises_auth_error_with_message():
+    body = b'{"message": "Unauthorized. Incorrect token.", "requestId": "abc"}'
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, stream=_AsyncSlowStream([body]))
+
+    db = DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler))
+    with pytest.raises(AuthError) as exc_info:
+        async for _ in db.ask([{"role": "user", "content": "hi"}]):
+            pass
+    assert exc_info.value.message == "Unauthorized. Incorrect token."
+    assert exc_info.value.request_id == "abc"
+
+
+@pytest.mark.anyio
+async def test_async_ask_streaming_429_raises_rate_limit_error_with_retry_after():
+    body = b'{"message": "slow down"}'
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"retry-after": "5"}, stream=_AsyncSlowStream([body]))
+
+    db = DiffbotAsync(token="test-token", retry=False, transport=httpx.MockTransport(handler))
+    with pytest.raises(RateLimitError) as exc_info:
+        async for _ in db.ask([{"role": "user", "content": "hi"}]):
+            pass
+    assert exc_info.value.retry_after == "5"
+    assert exc_info.value.message == "slow down"
 
 
 """

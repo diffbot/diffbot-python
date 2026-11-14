@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from diffbot import Diffbot, DiffbotAsync
+from diffbot import APIError, Diffbot, DiffbotAsync, NotFoundError
 
 
 """
@@ -85,6 +85,22 @@ async def test_async_ontology_honors_custom_ontology_url():
     )
     ont = await db.dql_fetch_ontology()
     assert ont.types() == ["Person"]
+
+
+"""
+Errors
+"""
+
+
+def test_dql_404_raises_not_found_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"message": "no such report"})
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    with pytest.raises(NotFoundError) as exc_info:
+        db.dql("type:Organization")
+    assert isinstance(exc_info.value, APIError)
+    assert exc_info.value.message == "no such report"
 
 
 """

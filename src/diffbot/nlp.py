@@ -2,10 +2,12 @@
 
 from typing import TYPE_CHECKING, Any, Dict
 
+from ._constants import NLP_HOST_BASE
+
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
 
-NLP_BASE = "https://nl.diffbot.com/v1/"
+NLP_BASE = f"{NLP_HOST_BASE}/v1/"
 NLP_FIELDS = "entities,sentiment"
 
 
@@ -17,8 +19,7 @@ def entities(
 ) -> Dict[str, Any]:
     params = {"token": client.token, "fields": NLP_FIELDS}
     payload = [{"lang": lang, "format": "plain text", "content": text}]
-    response = client._http.post(client.nlp_url, params=params, json=payload)
-    client._raise_for_status(response)
+    response = client.request("POST", client.nlp_url, params=params, json=payload)
     data = response.json()
     return data[0] if isinstance(data, list) else data
 
@@ -31,7 +32,6 @@ async def entities_async(
 ) -> Dict[str, Any]:
     params = {"token": client.token, "fields": NLP_FIELDS}
     payload = [{"lang": lang, "format": "plain text", "content": text}]
-    response = await client._http.post(client.nlp_url, params=params, json=payload)
-    client._raise_for_status(response)
+    response = await client.request("POST", client.nlp_url, params=params, json=payload)
     data = response.json()
     return data[0] if isinstance(data, list) else data

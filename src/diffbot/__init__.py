@@ -41,10 +41,14 @@ from .errors import (
     AuthError,
     DiffbotError,
     ExtractionError,
+    JobError,
+    NotFoundError,
     RateLimitError,
     ValidationError,
 )
 from .ontology import Ontology
+from ._transport import RetryPolicy
+from .types import ChatMessage, ExportFormat, ResponseFormat, SnippetLength
 
 __all__ = [
     "Diffbot",
@@ -54,9 +58,16 @@ __all__ = [
     "CrawlEvent",
     "CrawlEventType",
     "Ontology",
+    "RetryPolicy",
+    "ChatMessage",
+    "ResponseFormat",
+    "ExportFormat",
+    "SnippetLength",
     "DiffbotError",
     "AuthError",
     "ExtractionError",
+    "JobError",
+    "NotFoundError",
     "RateLimitError",
     "APIError",
     "ValidationError",

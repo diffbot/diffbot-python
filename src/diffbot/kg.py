@@ -5,13 +5,15 @@ import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
+from ._constants import KG_BASE
 from .ontology import Ontology
+from .types import ExportFormat
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
 
-KG_DQL_ENDPOINT = "https://kg.diffbot.com/kg/v3/dql"
-KG_ONTOLOGY_ENDPOINT = "https://kg.diffbot.com/kg/ontology"
+KG_DQL_ENDPOINT = f"{KG_BASE}/kg/v3/dql"
+KG_ONTOLOGY_ENDPOINT = f"{KG_BASE}/kg/ontology"
 
 
 def _build_dql_params(
@@ -19,7 +21,7 @@ def _build_dql_params(
     query: str,
     size: int,
     from_: int,
-    format: str,
+    format: ExportFormat,
     filter: Optional[str],
     exportspec: Optional[str],
     extra: Optional[Dict[str, str]],
@@ -44,15 +46,14 @@ def dql(
     *,
     size: int = 10,
     from_: int = 0,
-    format: str = "json",
+    format: ExportFormat = "json",
     filter: Optional[str] = None,
     exportspec: Optional[str] = None,
     extra: Optional[Dict[str, str]] = None,
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
     params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = client._http.get(client.dql_url, params=params)
-    client._raise_for_status(response)
+    response = client.request("GET", client.dql_url, params=params)
     return response.content if raw else response.json()
 
 
@@ -62,15 +63,14 @@ async def dql_async(
     *,
     size: int = 10,
     from_: int = 0,
-    format: str = "json",
+    format: ExportFormat = "json",
     filter: Optional[str] = None,
     exportspec: Optional[str] = None,
     extra: Optional[Dict[str, str]] = None,
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
     params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = await client._http.get(client.dql_url, params=params)
-    client._raise_for_status(response)
+    response = await client.request("GET", client.dql_url, params=params)
     return response.content if raw else response.json()
 
 
@@ -104,8 +104,7 @@ async def dql_parallel_async(
 
 
 def dql_refresh_ontology(client: "Diffbot", dest: pathlib.Path) -> None:
-    response = client._http.get(client.ontology_url)
-    client._raise_for_status(response)
+    response = client.request("GET", client.ontology_url)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(response.content)
 
@@ -116,13 +115,11 @@ def dql_fetch_ontology(client: "Diffbot") -> Ontology:
     Performs no caching — the caller decides whether and where to hold onto the
     result. Use :func:`dql_refresh_ontology` instead to persist raw bytes to disk.
     """
-    response = client._http.get(client.ontology_url)
-    client._raise_for_status(response)
+    response = client.request("GET", client.ontology_url)
     return Ontology.from_json(response.content)
 
 
 async def dql_fetch_ontology_async(client: "DiffbotAsync") -> Ontology:
     """Async variant of :func:`dql_fetch_ontology`."""
-    response = await client._http.get(client.ontology_url)
-    client._raise_for_status(response)
+    response = await client.request("GET", client.ontology_url)
     return Ontology.from_json(response.content)

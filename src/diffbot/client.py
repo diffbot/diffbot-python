@@ -7,7 +7,16 @@ from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence,
 import httpx
 
 from . import __version__
-from .errors import APIError, AuthError, RateLimitError, ValidationError
+from ._constants import API_BASE, DEFAULT_TIMEOUT, KG_BASE, LLM_BASE, NLP_HOST_BASE
+from ._transport import (
+    QueryParams,
+    RetryPolicy,
+    request as _transport_request,
+    request_async as _transport_request_async,
+    resolve_retry_policy,
+)
+from .errors import ValidationError
+from .types import ChatMessage, ExportFormat, ResponseFormat, SnippetLength
 from .extract import extract as _extract, extract_async as _extract_async
 from .ask import (
     ask as _ask,
@@ -27,8 +36,6 @@ from .crawl import (
     crawl_list_jobs_async as _crawl_list_jobs_async,
 )
 from .kg import (
-    KG_DQL_ENDPOINT,
-    KG_ONTOLOGY_ENDPOINT,
     dql as _dql,
     dql_async as _dql_async,
     dql_fetch_ontology as _dql_fetch_ontology,
@@ -39,20 +46,13 @@ from .kg import (
 )
 from .ontology import Ontology
 from .web_search import (
-    WEB_SEARCH_BASE,
     web_search as _web_search,
     web_search_async as _web_search_async,
 )
 from .nlp import (
-    NLP_BASE,
     entities as _entities,
     entities_async as _entities_async,
 )
-
-EXTRACT_BASE = "https://api.diffbot.com/v3"
-CRAWL_BASE = "https://api.diffbot.com/v3/crawl"
-DIFFBOT_LLM_BASE = "https://llm.diffbot.com/rag/v1/chat/completions"
-DEFAULT_TIMEOUT = 30.0
 
 
 class Diffbot:
@@ -69,25 +69,39 @@ class Diffbot:
         token: str,
         *,
         timeout: float = DEFAULT_TIMEOUT,
-        analyze_url: str = EXTRACT_BASE,
-        llm_url: str = DIFFBOT_LLM_BASE,
-        crawler_url: str = CRAWL_BASE,
-        web_search_url: str = WEB_SEARCH_BASE,
-        nlp_url: str = NLP_BASE,
-        dql_url: str = KG_DQL_ENDPOINT,
-        ontology_url: str = KG_ONTOLOGY_ENDPOINT,
+        retry: Union[RetryPolicy, bool, None] = None,
+        api_base: str = API_BASE,
+        kg_base: str = KG_BASE,
+        llm_base: str = LLM_BASE,
+        nlp_base: str = NLP_HOST_BASE,
+        analyze_url: Optional[str] = None,
+        llm_url: Optional[str] = None,
+        crawler_url: Optional[str] = None,
+        web_search_url: Optional[str] = None,
+        nlp_url: Optional[str] = None,
+        dql_url: Optional[str] = None,
+        ontology_url: Optional[str] = None,
         transport: Optional[httpx.BaseTransport] = None,
     ):
         if not token:
             raise ValidationError("token is required")
         self.token = token
-        self.analyze_url = analyze_url
-        self.llm_url = llm_url
-        self.crawler_url = crawler_url
-        self.web_search_url = web_search_url
-        self.nlp_url = nlp_url
-        self.dql_url = dql_url
-        self.ontology_url = ontology_url
+        self.api_base = api_base
+        self.kg_base = kg_base
+        self.llm_base = llm_base
+        self.nlp_base = nlp_base
+        # analyze_url/crawler_url are bases the SDK appends to (/{api}, /data); the
+        # rest are complete endpoints. Each *_url option wins over its matching base
+        # when set, so pointing the whole SDK at a staging host is a one-liner while
+        # still allowing a single endpoint to be overridden independently.
+        self.analyze_url = analyze_url or f"{api_base}/v3"
+        self.crawler_url = crawler_url or f"{api_base}/v3/crawl"
+        self.llm_url = llm_url or f"{llm_base}/rag/v1/chat/completions"
+        self.web_search_url = web_search_url or f"{llm_base}/api/v1/web_search"
+        self.nlp_url = nlp_url or f"{nlp_base}/v1/"
+        self.dql_url = dql_url or f"{kg_base}/kg/v3/dql"
+        self.ontology_url = ontology_url or f"{kg_base}/kg/ontology"
+        self._retry_policy = resolve_retry_policy(retry)
         self._http = httpx.Client(
             timeout=timeout,
             headers={"User-Agent": f"diffbot-python/{__version__}"},
@@ -108,16 +122,42 @@ class Diffbot:
     def close(self) -> None:
         self._http.close()
 
-    def _raise_for_status(self, response: httpx.Response) -> None:
-        if response.is_success:
-            return
-        status = response.status_code
-        body = response.text
-        if status in (401, 403):
-            raise AuthError(status, body)
-        if status == 429:
-            raise RateLimitError(status, body, retry_after=response.headers.get("retry-after"))
-        raise APIError(status, body)
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Optional[QueryParams] = None,
+        headers: Optional[Dict[str, str]] = None,
+        json: Optional[Any] = None,
+        content: Optional[Union[str, bytes]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
+        retryable: bool = True,
+        follow_redirects: Optional[bool] = None,
+        stream: bool = False,
+    ) -> httpx.Response:
+        """Send a request through this client's transport (retry policy, timeout)
+        and raise for a non-2xx status. Returns the raw :class:`httpx.Response`.
+
+        With ``stream=True`` the response body is left unread on success — the
+        caller must iterate it and call ``.close()``.
+        """
+        return _transport_request(
+            self._http,
+            self._retry_policy,
+            method,
+            url,
+            params=params,
+            headers=headers,
+            json=json,
+            content=content,
+            data=data,
+            timeout=timeout,
+            retryable=retryable,
+            follow_redirects=follow_redirects,
+            stream=stream,
+        )
 
     def extract(self, url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
         """Extract structured content from a URL. Returns the raw Diffbot API response."""
@@ -125,9 +165,9 @@ class Diffbot:
 
     def ask(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[ChatMessage],
         *,
-        response_format: Optional[Dict[str, Any]] = None,
+        response_format: Optional[ResponseFormat] = None,
     ) -> Iterator[str]:
         """Stream a response from the Diffbot LLM RAG API.
 
@@ -138,10 +178,10 @@ class Diffbot:
 
     def ask_json(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[ChatMessage],
         schema: Optional[Dict[str, Any]] = None,
         *,
-        response_format: Optional[Dict[str, Any]] = None,
+        response_format: Optional[ResponseFormat] = None,
     ) -> Any:
         """Ask the Diffbot LLM and return the answer parsed as JSON.
 
@@ -172,7 +212,7 @@ class Diffbot:
         *,
         size: int = 10,
         from_: int = 0,
-        format: str = "json",
+        format: ExportFormat = "json",
         filter: Optional[str] = None,
         exportspec: Optional[str] = None,
         extra: Optional[Dict[str, str]] = None,
@@ -203,7 +243,7 @@ class Diffbot:
         *,
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
-        snippet_length: Optional[str] = None,
+        snippet_length: Optional[SnippetLength] = None,
     ) -> Dict[str, Any]:
         """Search the web via the Diffbot LLM web search API.
 
@@ -236,25 +276,35 @@ class DiffbotAsync:
         token: str,
         *,
         timeout: float = DEFAULT_TIMEOUT,
-        analyze_url: str = EXTRACT_BASE,
-        llm_url: str = DIFFBOT_LLM_BASE,
-        crawler_url: str = CRAWL_BASE,
-        web_search_url: str = WEB_SEARCH_BASE,
-        nlp_url: str = NLP_BASE,
-        dql_url: str = KG_DQL_ENDPOINT,
-        ontology_url: str = KG_ONTOLOGY_ENDPOINT,
+        retry: Union[RetryPolicy, bool, None] = None,
+        api_base: str = API_BASE,
+        kg_base: str = KG_BASE,
+        llm_base: str = LLM_BASE,
+        nlp_base: str = NLP_HOST_BASE,
+        analyze_url: Optional[str] = None,
+        llm_url: Optional[str] = None,
+        crawler_url: Optional[str] = None,
+        web_search_url: Optional[str] = None,
+        nlp_url: Optional[str] = None,
+        dql_url: Optional[str] = None,
+        ontology_url: Optional[str] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
     ):
         if not token:
             raise ValidationError("token is required")
         self.token = token
-        self.analyze_url = analyze_url
-        self.llm_url = llm_url
-        self.crawler_url = crawler_url
-        self.web_search_url = web_search_url
-        self.nlp_url = nlp_url
-        self.dql_url = dql_url
-        self.ontology_url = ontology_url
+        self.api_base = api_base
+        self.kg_base = kg_base
+        self.llm_base = llm_base
+        self.nlp_base = nlp_base
+        self.analyze_url = analyze_url or f"{api_base}/v3"
+        self.crawler_url = crawler_url or f"{api_base}/v3/crawl"
+        self.llm_url = llm_url or f"{llm_base}/rag/v1/chat/completions"
+        self.web_search_url = web_search_url or f"{llm_base}/api/v1/web_search"
+        self.nlp_url = nlp_url or f"{nlp_base}/v1/"
+        self.dql_url = dql_url or f"{kg_base}/kg/v3/dql"
+        self.ontology_url = ontology_url or f"{kg_base}/kg/ontology"
+        self._retry_policy = resolve_retry_policy(retry)
         self._http = httpx.AsyncClient(
             timeout=timeout,
             headers={"User-Agent": f"diffbot-python/{__version__}"},
@@ -275,16 +325,37 @@ class DiffbotAsync:
     async def close(self) -> None:
         await self._http.aclose()
 
-    def _raise_for_status(self, response: httpx.Response) -> None:
-        if response.is_success:
-            return
-        status = response.status_code
-        body = response.text
-        if status in (401, 403):
-            raise AuthError(status, body)
-        if status == 429:
-            raise RateLimitError(status, body, retry_after=response.headers.get("retry-after"))
-        raise APIError(status, body)
+    async def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Optional[QueryParams] = None,
+        headers: Optional[Dict[str, str]] = None,
+        json: Optional[Any] = None,
+        content: Optional[Union[str, bytes]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
+        retryable: bool = True,
+        follow_redirects: Optional[bool] = None,
+        stream: bool = False,
+    ) -> httpx.Response:
+        """Async twin of :meth:`Diffbot.request`."""
+        return await _transport_request_async(
+            self._http,
+            self._retry_policy,
+            method,
+            url,
+            params=params,
+            headers=headers,
+            json=json,
+            content=content,
+            data=data,
+            timeout=timeout,
+            retryable=retryable,
+            follow_redirects=follow_redirects,
+            stream=stream,
+        )
 
     async def extract(self, url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
         """Extract structured content from a URL. Returns the raw Diffbot API response."""
@@ -292,9 +363,9 @@ class DiffbotAsync:
 
     async def ask(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[ChatMessage],
         *,
-        response_format: Optional[Dict[str, Any]] = None,
+        response_format: Optional[ResponseFormat] = None,
     ) -> AsyncIterator[str]:
         """Stream a response from the Diffbot LLM RAG API.
 
@@ -306,10 +377,10 @@ class DiffbotAsync:
 
     async def ask_json(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[ChatMessage],
         schema: Optional[Dict[str, Any]] = None,
         *,
-        response_format: Optional[Dict[str, Any]] = None,
+        response_format: Optional[ResponseFormat] = None,
     ) -> Any:
         """Ask the Diffbot LLM and return the answer parsed as JSON.
 
@@ -341,7 +412,7 @@ class DiffbotAsync:
         *,
         size: int = 10,
         from_: int = 0,
-        format: str = "json",
+        format: ExportFormat = "json",
         filter: Optional[str] = None,
         exportspec: Optional[str] = None,
         extra: Optional[Dict[str, str]] = None,
@@ -368,7 +439,7 @@ class DiffbotAsync:
         *,
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
-        snippet_length: Optional[str] = None,
+        snippet_length: Optional[SnippetLength] = None,
     ) -> Dict[str, Any]:
         """Search the web via the Diffbot LLM web search API.
 

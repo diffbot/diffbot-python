@@ -27,19 +27,19 @@ def _normalize_url(url: str) -> str:
 
 def extract(client: "Diffbot", url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
     url = _normalize_url(url)
-    response = client._http.get(
+    response = client.request(
+        "GET",
         f"{client.analyze_url}/{api}",
         params=_build_params(client, url, fmt),
     )
-    client._raise_for_status(response)
     return _parse_response(client, response.json())
 
 
 async def extract_async(client: "DiffbotAsync", url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
     url = _normalize_url(url)
-    response = await client._http.get(
+    response = await client.request(
+        "GET",
         f"{client.analyze_url}/{api}",
         params=_build_params(client, url, fmt),
     )
-    client._raise_for_status(response)
     return _parse_response(client, response.json())
