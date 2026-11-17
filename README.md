@@ -285,6 +285,23 @@ for entity in result["entities"]:
 print("sentiment:", result.get("sentiment"))
 ```
 
+### NLP: other fields (`nlp`)
+`entities()` always requests `entities` and `sentiment`. `nlp()` reaches the rest of the
+same endpoint for a single document.
+```python
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+result = db.nlp(
+    "Acme Launches Rocket\n\nAcme announced a new rocket today.",
+    fields=["summary", "categories", "language"],
+    format="plain text with title",
+    document_type="news article",
+    custom_summary={"max_number_of_sentences": 1},
+)
+print(result.get("summary"))
+```
+
 ## Async Usage
 
 ### Extract structured content

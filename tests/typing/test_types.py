@@ -18,6 +18,7 @@ from diffbot import (
     DqlEntity,
     DqlResponse,
     EntitiesResponse,
+    NlpResponse,
     ExtractResponse,
     ImageExtractResponse,
     ProductExtractResponse,
@@ -120,3 +121,15 @@ def _dql_named_option_types() -> None:
     assert_type(db.dql("q", non_canonical_facts=True, no_dedup_articles=True, filter_exclude="a"), DqlResponse)
     db.dql("q", type="bogus")  # type: ignore[call-overload]
     db.dql("q", cluster="nope")  # type: ignore[call-overload]
+
+
+def _nlp_types() -> None:
+    assert_type(db.nlp("x"), NlpResponse)
+    assert_type(db.nlp("x", fields=["summary", "language"], custom_summary={"max_number_of_sentences": 2}), NlpResponse)
+    assert_type(db.entities("x"), EntitiesResponse)
+    db.nlp("x", fields=["bogus"])  # type: ignore[list-item]
+    db.nlp("x", format="html")  # type: ignore[arg-type]
+
+
+async def _nlp_async_types() -> None:
+    assert_type(await adb.nlp("x", format="plain text with title"), NlpResponse)

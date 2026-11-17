@@ -45,6 +45,10 @@ from .types import (
     JobExtractResponse,
     ListExtractOptions,
     ListExtractResponse,
+    NlpCustomSummary,
+    NlpField,
+    NlpFormat,
+    NlpResponse,
     ProductExtractOptions,
     ProductExtractResponse,
     ResponseFormat,
@@ -96,6 +100,8 @@ from .web_search import (
 from .nlp import (
     entities as _entities,
     entities_async as _entities_async,
+    nlp as _nlp,
+    nlp_async as _nlp_async,
 )
 
 
@@ -459,6 +465,28 @@ class Diffbot:
         """
         return _entities(self, text, lang=lang)
 
+    def nlp(
+        self,
+        text: str,
+        *,
+        fields: Optional[Sequence[NlpField]] = None,
+        lang: str = "auto",
+        format: NlpFormat = "plain text",
+        document_type: Optional[str] = None,
+        custom_summary: Optional[NlpCustomSummary] = None,
+    ) -> NlpResponse:
+        """Run the NL endpoint on a single document and return the requested ``fields``.
+
+        fields: any of ``"entities"``, ``"sentiment"``, ``"facts"``, ``"records"``,
+        ``"categories"``, ``"sentences"``, ``"language"``, ``"summary"``; omit for the API
+        default (``entities,sentiment,facts,records,sentences``). format:
+        ``"plain text"`` or ``"plain text with title"`` (title, two line breaks, body).
+        document_type gives the model context; custom_summary
+        ``{"max_number_of_sentences": 1..10}`` shapes the ``summary`` field.
+        Multi-document batches are not supported; :meth:`entities` is unchanged.
+        """
+        return _nlp(self, text, fields=fields, lang=lang, format=format, document_type=document_type, custom_summary=custom_summary)
+
 
 class DiffbotAsync:
     """Async client for Diffbot APIs.
@@ -797,3 +825,25 @@ class DiffbotAsync:
         id:or("id1","id2","id3") — no type: declaration required.
         """
         return await _entities_async(self, text, lang=lang)
+
+    async def nlp(
+        self,
+        text: str,
+        *,
+        fields: Optional[Sequence[NlpField]] = None,
+        lang: str = "auto",
+        format: NlpFormat = "plain text",
+        document_type: Optional[str] = None,
+        custom_summary: Optional[NlpCustomSummary] = None,
+    ) -> NlpResponse:
+        """Run the NL endpoint on a single document and return the requested ``fields``.
+
+        fields: any of ``"entities"``, ``"sentiment"``, ``"facts"``, ``"records"``,
+        ``"categories"``, ``"sentences"``, ``"language"``, ``"summary"``; omit for the API
+        default (``entities,sentiment,facts,records,sentences``). format:
+        ``"plain text"`` or ``"plain text with title"`` (title, two line breaks, body).
+        document_type gives the model context; custom_summary
+        ``{"max_number_of_sentences": 1..10}`` shapes the ``summary`` field.
+        Multi-document batches are not supported; :meth:`entities` is unchanged.
+        """
+        return await _nlp_async(self, text, fields=fields, lang=lang, format=format, document_type=document_type, custom_summary=custom_summary)

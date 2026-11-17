@@ -175,6 +175,36 @@ class EntitiesResponse(TypedDict, total=False):
     sentiment: float
 
 
+#: Fields ``nlp()`` can request (``fields`` query param of the NL endpoint).
+NlpField = Literal["entities", "sentiment", "facts", "records", "categories", "sentences", "language", "summary"]
+
+#: ``format`` of the submitted document.
+NlpFormat = Literal["plain text", "plain text with title"]
+
+
+class NlpCustomSummary(TypedDict, total=False):
+    """Summary generation options (wire: ``customSummary.maxNumberOfSentences``)."""
+
+    max_number_of_sentences: int
+
+
+class NlpResponse(TypedDict, total=False):
+    """What :meth:`Diffbot.nlp` returns: any of the requested ``fields`` may be present.
+
+    Only the ones with a documented shape here are typed in detail; the rest are
+    left loose (``Any``) because the spec examples are the only source.
+    """
+
+    entities: List[NlpEntity]
+    sentiment: float
+    facts: List[Any]
+    records: List[Any]
+    categories: List[Any]
+    sentences: List[Any]
+    language: str
+    summary: str
+
+
 # ---- Extract (api.diffbot.com/v3/{api}) ----
 
 #: Built-in Extract APIs; any other string is a Custom API name.

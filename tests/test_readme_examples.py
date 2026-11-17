@@ -290,6 +290,31 @@ async def test_readme_async_entities():
     assert result["sentiment"] == 0.3
 
 
+def test_readme_sync_nlp():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=[{"summary": "Acme launched a rocket.", "language": "en"}])
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    result = db.nlp(
+        "Acme Launches Rocket\n\nAcme announced a new rocket today.",
+        fields=["summary", "categories", "language"],
+        format="plain text with title",
+        document_type="news article",
+        custom_summary={"max_number_of_sentences": 1},
+    )
+    assert result["summary"] == "Acme launched a rocket."
+    (req,) = seen
+    assert req.url.params["fields"] == "summary,categories,language"
+    assert json.loads(req.content) == [{
+        "lang": "auto", "format": "plain text with title",
+        "content": "Acme Launches Rocket\n\nAcme announced a new rocket today.",
+        "documentType": "news article", "customSummary": {"maxNumberOfSentences": 1},
+    }]
+
+
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------
