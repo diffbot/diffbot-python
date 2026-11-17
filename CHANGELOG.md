@@ -1,5 +1,55 @@
 # Changelog
 
+## 3.3.0 (unreleased)
+
+Response types, a pyright gate, and two small methods that complete existing
+workflows. Additive minor: no wire changes. The package version in
+`pyproject.toml` is bumped at release time.
+
+### Added
+
+- Response `TypedDict`s (stdlib, `total=False`, no Pydantic, Python 3.9-compatible),
+  exported from `diffbot`: `DqlResponse`/`DqlEntity`, `WebSearchResponse`/
+  `WebSearchResult`, `EntitiesResponse`, `ExtractResponse` and per-API
+  `ArticleExtractResponse`, `ProductExtractResponse`, ... with their object types,
+  `CrawlJob`, `CrawlDataRecord`, `AccountResponse`, `AskChunk`.
+- `account(days=None)` and `verify_token()` (sync and async): `GET /v4/account`.
+  `verify_token()` calls it with `days=1`; only an auth failure (401/403) returns
+  `False`, every other error propagates. The account response carries `token` and
+  `childTokens`: don't log it whole.
+- `crawl_download(name, *, format="json", type=None, num=None)` (sync and async):
+  `GET /v3/crawl/data`. `format="csv"` returns `str`, otherwise a list of records.
+  The crawl watcher now uses it. For tools that can't block, the recommended
+  pattern is `crawl(..., watch=False)` -> `crawl_get_job` -> `crawl_download`.
+- `extract()` keyword-only options after `fmt`: `timeout` (server-side fetch timeout
+  in ms, default still 30000), `mode` (overrides the `fmt="markdown"` -> `llm`
+  mapping), `fields` (sequence, comma-joined; per-API `Literal` names), `fallback`,
+  `discussion`, `paging`, `max_pages`, `natural_language`, `summary_num_sentences`,
+  `max_tags`, `tag_confidence`, `category_confidence`, `use_proxy`, and `extra`
+  for anything else (`proxy`/`proxyAuth`; keys that collide with a named option or
+  `token`/`url` raise `ValidationError`). When you set `timeout`, the per-call
+  transport timeout is raised to at least `timeout + 10s` (never lowered).
+- Dev: `pyright` (basic on `src/`, strict on `types.py`) plus `tests/typing`
+  `assert_type` checks, run in `tests.yml`.
+
+### Fixed
+
+- `dql(format="csv")` and `dql(format="jsonl")` without `raw=True` crashed in
+  `response.json()`. `csv` now returns `str`, `xls`/`xlsx` return `bytes`, and
+  `jsonl` returns an iterator of entities (`AsyncIterator` from the async client).
+  `raw=True` is unchanged (undecoded `bytes`).
+
+### Changed (type-level only)
+
+- Return annotations changed from `Dict[str, Any]` to the TypedDicts above
+  (`dql`, `extract`, `web_search`, `entities`, `crawl_list_jobs`, `crawl_get_job`),
+  and `dql`/`extract`/`crawl_download` gained `@overload`s. Runtime values are
+  unchanged. A type checker may now flag keys the types don't declare; wrap the
+  value in `typing.cast(Dict[str, Any], resp)` as the escape hatch. `dql_parallel`
+  returns `List[Any]` (each element's type follows its own call).
+- `crawl_get_job` still returns `{}` for a missing job (the TypeScript SDK returns
+  `undefined`); unchanged on purpose.
+
 ## 3.2.0 (unreleased)
 
 Shared transport foundation, a sync/async de-duplication refactor, and DQL sent

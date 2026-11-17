@@ -32,9 +32,9 @@ Unchanged by the move to POST. Covered by the existing raw-mode tests.
 Adding `dql_fetch_ontology_text()` and `dql_refresh_ontology_async()` to close the
 Python/TypeScript asymmetry is scheduled for **S2** (Python 3.4.0).
 
-## 5. Response TypedDicts: scheduled for S1
+## 5. Response TypedDicts: landed in S1
 
-Request-side `TypedDict`/`Literal` aliases landed in `src/diffbot/types.py`.
+Request-side `TypedDict`/`Literal` aliases landed in `src/diffbot/types.py` with Phase 0.
 Response shapes (`DqlResponse`, `WebSearchResponse`, `ExtractResponse`, `CrawlJob`,
-`AccountResponse`, `AskChunk`, ...) are scheduled for **S1** (Python 3.3.0),
-together with a pyright CI gate so they are checked from day one.
+`AccountResponse`, `AskChunk`, ...) land in S1 (Python 3.3.0, branch `feat/sdk-s1`)
+together with the pyright CI gate, so they are checked from day one.

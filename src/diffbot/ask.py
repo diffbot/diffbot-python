@@ -5,7 +5,7 @@ import re
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
 
 from .errors import ValidationError
-from .types import ChatMessage, ResponseFormat
+from .types import AskChunk, ChatMessage, ResponseFormat
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -76,12 +76,14 @@ def _build_payload(
 
 def _parse_chunk(line: str):
     try:
-        chunk = json.loads(line.replace("data: ", ""))
+        chunk: AskChunk = json.loads(line.replace("data: ", ""))
     except json.JSONDecodeError:
         return None
     choices = chunk.get("choices")
-    if choices and choices[0].get("delta", {}).get("content"):
-        return choices[0]["delta"]["content"]
+    if choices:
+        content = choices[0].get("delta", {}).get("content")
+        if content:
+            return content
     return None
 
 
