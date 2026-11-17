@@ -196,23 +196,42 @@ async def dql_parallel_async(
     return list(await asyncio.gather(*(_one(q) for q in queries)))
 
 
+def dql_fetch_ontology_text(client: "Diffbot") -> str:
+    """Download the ontology and return the raw JSON text, undecoded."""
+    return client.request("GET", client.ontology_url).text
+
+
+async def dql_fetch_ontology_text_async(client: "DiffbotAsync") -> str:
+    """Async variant of :func:`dql_fetch_ontology_text`."""
+    return (await client.request("GET", client.ontology_url)).text
+
+
+def _write_ontology(dest: pathlib.Path, content: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(content)
+
+
 def dql_refresh_ontology(client: "Diffbot", dest: pathlib.Path) -> None:
     response = client.request("GET", client.ontology_url)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(response.content)
+    _write_ontology(dest, response.content)
+
+
+async def dql_refresh_ontology_async(client: "DiffbotAsync", dest: pathlib.Path) -> None:
+    """Async variant of :func:`dql_refresh_ontology`."""
+    response = await client.request("GET", client.ontology_url)
+    await asyncio.to_thread(_write_ontology, dest, response.content)
 
 
 def dql_fetch_ontology(client: "Diffbot") -> Ontology:
     """Download the ontology and return it as a queryable :class:`Ontology`.
 
     Performs no caching — the caller decides whether and where to hold onto the
-    result. Use :func:`dql_refresh_ontology` instead to persist raw bytes to disk.
+    result. Use :func:`dql_refresh_ontology` instead to persist raw bytes to disk,
+    or :func:`dql_fetch_ontology_text` for the raw JSON text.
     """
-    response = client.request("GET", client.ontology_url)
-    return Ontology.from_json(response.content)
+    return Ontology.from_json(dql_fetch_ontology_text(client))
 
 
 async def dql_fetch_ontology_async(client: "DiffbotAsync") -> Ontology:
     """Async variant of :func:`dql_fetch_ontology`."""
-    response = await client.request("GET", client.ontology_url)
-    return Ontology.from_json(response.content)
+    return Ontology.from_json(await dql_fetch_ontology_text_async(client))

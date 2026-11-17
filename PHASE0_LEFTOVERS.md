@@ -27,10 +27,13 @@ The TypeScript SDK corrupted `xls`/`xlsx` exports by re-encoding text. Python's
 byte path (`response.content`) was already correct; no code change was needed.
 Unchanged by the move to POST. Covered by the existing raw-mode tests.
 
-## 4. Ontology parity: scheduled for S2
+## 4. Ontology parity: landed in S2
 
-Adding `dql_fetch_ontology_text()` and `dql_refresh_ontology_async()` to close the
-Python/TypeScript asymmetry is scheduled for **S2** (Python 3.4.0).
+`dql_fetch_ontology_text()` (sync + async) and `dql_refresh_ontology_async()` landed in
+**S2** (Python 3.4.0, branch `feat/sdk-s2`). `dql_fetch_ontology()` reuses the text
+fetch. On the `DiffbotAsync` client the refresh is named `dql_refresh_ontology` (the
+async client drops the `_async` suffix, as for `dql_fetch_ontology`); the module-level
+function in `diffbot.kg` is `dql_refresh_ontology_async`.
 
 ## 5. Response TypedDicts: landed in S1
 

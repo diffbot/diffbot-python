@@ -4,6 +4,7 @@
 that the calls themselves work against a mock transport.
 """
 import json
+import pathlib
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, cast
 
 import httpx
@@ -133,3 +134,9 @@ def _nlp_types() -> None:
 
 async def _nlp_async_types() -> None:
     assert_type(await adb.nlp("x", format="plain text with title"), NlpResponse)
+
+
+async def _ontology_text_types() -> None:
+    assert_type(db.dql_fetch_ontology_text(), str)
+    assert_type(await adb.dql_fetch_ontology_text(), str)
+    assert_type(await adb.dql_refresh_ontology(pathlib.Path("o.json")), None)

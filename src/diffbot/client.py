@@ -88,9 +88,12 @@ from .kg import (
     dql_async as _dql_async,
     dql_fetch_ontology as _dql_fetch_ontology,
     dql_fetch_ontology_async as _dql_fetch_ontology_async,
+    dql_fetch_ontology_text as _dql_fetch_ontology_text,
+    dql_fetch_ontology_text_async as _dql_fetch_ontology_text_async,
     dql_parallel as _dql_parallel,
     dql_parallel_async as _dql_parallel_async,
     dql_refresh_ontology as _dql_refresh_ontology,
+    dql_refresh_ontology_async as _dql_refresh_ontology_async,
 )
 from .ontology import Ontology
 from .web_search import (
@@ -424,6 +427,10 @@ class Diffbot:
     def dql_fetch_ontology(self) -> Ontology:
         """Download the ontology and return it as a queryable Ontology (no caching)."""
         return _dql_fetch_ontology(self)
+
+    def dql_fetch_ontology_text(self) -> str:
+        """Download the ontology and return the raw JSON text (no parsing, no caching)."""
+        return _dql_fetch_ontology_text(self)
 
     def web_search(
         self,
@@ -789,6 +796,14 @@ class DiffbotAsync:
     async def dql_fetch_ontology(self) -> Ontology:
         """Download the ontology and return it as a queryable Ontology (no caching)."""
         return await _dql_fetch_ontology_async(self)
+
+    async def dql_fetch_ontology_text(self) -> str:
+        """Download the ontology and return the raw JSON text (no parsing, no caching)."""
+        return await _dql_fetch_ontology_text_async(self)
+
+    async def dql_refresh_ontology(self, dest: pathlib.Path) -> None:
+        """Download the Diffbot Knowledge Graph ontology and write it to dest."""
+        await _dql_refresh_ontology_async(self, dest)
 
     async def web_search(
         self,

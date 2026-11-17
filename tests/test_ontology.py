@@ -117,3 +117,52 @@ async def test_async_dql_parallel_runs_all_queries():
         ]
     )
     assert [r["hits"] for r in results] == [5, 100]
+
+
+"""
+Raw text fetch and async refresh (S2)
+"""
+
+RAW = json.dumps(FIXTURE_ONTOLOGY)
+
+
+def _raw_handler(request: httpx.Request) -> httpx.Response:
+    assert request.method == "GET"
+    assert request.url.path == "/kg/ontology"
+    return httpx.Response(200, text=RAW)
+
+
+def test_dql_fetch_ontology_text_returns_raw_json_text():
+    db = Diffbot(token="t", transport=httpx.MockTransport(_raw_handler))
+    text = db.dql_fetch_ontology_text()
+    assert text == RAW
+    assert json.loads(text) == FIXTURE_ONTOLOGY
+    # the parsed variant still works on the same payload
+    assert db.dql_fetch_ontology().types() == ["Organization", "Person"]
+
+
+@pytest.mark.anyio
+async def test_async_dql_fetch_ontology_text_and_parsed():
+    db = DiffbotAsync(token="t", transport=httpx.MockTransport(_raw_handler))
+    assert await db.dql_fetch_ontology_text() == RAW
+    assert (await db.dql_fetch_ontology()).types() == ["Organization", "Person"]
+
+
+def test_dql_refresh_ontology_writes_bytes(tmp_path):
+    db = Diffbot(token="t", transport=httpx.MockTransport(_raw_handler))
+    dest = tmp_path / "nested" / "ontology.json"
+    db.dql_refresh_ontology(dest)
+    assert json.loads(dest.read_text()) == FIXTURE_ONTOLOGY
+
+
+@pytest.mark.anyio
+async def test_async_dql_refresh_ontology_writes_bytes(tmp_path):
+    db = DiffbotAsync(token="t", transport=httpx.MockTransport(_raw_handler))
+    dest = tmp_path / "nested" / "ontology.json"
+    await db.dql_refresh_ontology(dest)
+    assert json.loads(dest.read_text()) == FIXTURE_ONTOLOGY
+    from diffbot.kg import dql_refresh_ontology_async
+
+    other = tmp_path / "b.json"
+    await dql_refresh_ontology_async(db, other)
+    assert other.read_bytes() == dest.read_bytes()
