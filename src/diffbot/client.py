@@ -427,7 +427,7 @@ class Diffbot:
 
     def web_search(
         self,
-        text: str,
+        text: Union[str, Sequence[str]],
         *,
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
@@ -435,10 +435,14 @@ class Diffbot:
     ) -> WebSearchResponse:
         """Search the web via the Diffbot LLM web search API.
 
-        snippet_length: "short", "medium", "long" or "full" — how much of each
+        text: one query string, or 1-5 strings (sent as repeated ``text=`` params);
+        anything else raises ``ValidationError``.
+
+        snippet_length (undocumented upstream; ``rerank`` is set internally): "short", "medium", "long" or "full" — how much of each
         page's matching content to return. Omit for the API default (long).
         "full" returns the whole stored page (reranking is disabled for it);
-        use it with a url:<URL> query.
+        use it with a url:<URL> query. Values are case-insensitive; anything else
+        raises ``ValidationError``.
         """
         return _web_search(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
@@ -788,7 +792,7 @@ class DiffbotAsync:
 
     async def web_search(
         self,
-        text: str,
+        text: Union[str, Sequence[str]],
         *,
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
@@ -796,10 +800,14 @@ class DiffbotAsync:
     ) -> WebSearchResponse:
         """Search the web via the Diffbot LLM web search API.
 
-        snippet_length: "short", "medium", "long" or "full" — how much of each
+        text: one query string, or 1-5 strings (sent as repeated ``text=`` params);
+        anything else raises ``ValidationError``.
+
+        snippet_length (undocumented upstream; ``rerank`` is set internally): "short", "medium", "long" or "full" — how much of each
         page's matching content to return. Omit for the API default (long).
         "full" returns the whole stored page (reranking is disabled for it);
-        use it with a url:<URL> query.
+        use it with a url:<URL> query. Values are case-insensitive; anything else
+        raises ``ValidationError``.
         """
         return await _web_search_async(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 

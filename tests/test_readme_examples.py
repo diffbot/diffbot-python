@@ -229,6 +229,17 @@ def test_readme_sync_web_search():
     assert r["content"] == "AI-powered web data."
 
 
+def test_readme_sync_web_search_multiple_text():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params.get_list("text") == ["diffbot knowledge graph", "diffbot crawl api"]
+        assert request.url.params["size"] == "3"
+        return httpx.Response(200, json={"search_results": []})
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    results = db.web_search(["diffbot knowledge graph", "diffbot crawl api"], num_results=3)
+    assert results["search_results"] == []
+
+
 @pytest.mark.anyio
 async def test_readme_async_web_search():
     def handler(request: httpx.Request) -> httpx.Response:

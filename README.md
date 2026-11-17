@@ -270,6 +270,9 @@ for r in results["search_results"]:
 # "short" (~1-1.5 KB per result), "medium", "long" (default), or "full"
 results = db.web_search("diffbot knowledge graph", num_results=5, snippet_length="short")
 
+# 1-5 queries in one call (sent as repeated text= params); 0 or >5 raises ValidationError
+results = db.web_search(["diffbot knowledge graph", "diffbot crawl api"], num_results=3)
+
 # "full" with a url: query returns the whole stored page
 page = db.web_search("url:https://en.wikipedia.org/wiki/Knowledge_graph", snippet_length="full")
 ```
