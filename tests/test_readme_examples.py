@@ -144,7 +144,7 @@ def test_readme_sync_crawl():
 
 def test_readme_sync_dql():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert "Diffbot" in request.url.params["query"]
+        assert "Diffbot" in json.loads(request.content)["query"]
         return httpx.Response(200, json={"data": [{"entity": {"name": "Diffbot"}}]})
 
     db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))

@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -114,3 +116,102 @@ def test_live_dql(db):
     assert len(result["data"]) > 0
     entity = result["data"][0]["entity"]
     assert entity.get("name") == "Diffbot"
+
+
+"""
+DQL is sent as POST with a JSON body
+"""
+
+
+def _capture():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [], "hits": 0})
+
+    return seen, handler
+
+
+def test_dql_posts_json_body_with_token_in_query():
+    seen, handler = _capture()
+    db = Diffbot(token="secret-tok", transport=httpx.MockTransport(handler))
+    db.dql('type:Organization name:"Diffbot"')
+    (req,) = seen
+    assert req.method == "POST"
+    assert req.headers["content-type"] == "application/json"
+    assert req.url.params["token"] == "secret-tok"
+    assert "query" not in req.url.params
+    assert "Diffbot" not in str(req.url)
+    body = json.loads(req.content)
+    assert body == {"query": 'type:Organization name:"Diffbot"', "size": 10}
+    assert "token" not in body
+
+
+def test_dql_body_defaults_and_options():
+    seen, handler = _capture()
+    db = Diffbot(token="t", transport=httpx.MockTransport(handler))
+    db.dql("q", size=0, from_=5, format="csv", filter="f", exportspec="a;b", extra={"jsonmode": "extended", "n": 3})
+    body = json.loads(seen[0].content)
+    assert body == {
+        "query": "q", "size": 0, "from": 5, "format": "csv", "filter": "f",
+        "exportspec": "a;b", "jsonmode": "extended", "n": 3,
+    }
+    seen.clear()
+    db.dql("q", format="json", from_=0)
+    assert json.loads(seen[0].content) == {"query": "q", "size": 10}
+
+
+def test_dql_long_query_is_not_in_url():
+    seen, handler = _capture()
+    db = Diffbot(token="t", transport=httpx.MockTransport(handler))
+    query = " OR ".join(f'name:"Company {i}"' for i in range(1000))
+    assert len(query) > 8000
+    db.dql(query, size=0)
+    assert len(str(seen[0].url)) < 200
+    assert json.loads(seen[0].content)["query"] == query
+
+
+def test_dql_retries_post_on_503():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.method)
+        if len(calls) == 1:
+            return httpx.Response(503, text="busy")
+        return httpx.Response(200, json={"hits": 1})
+
+    from diffbot import RetryPolicy
+
+    db = Diffbot(token="t", transport=httpx.MockTransport(handler), retry=RetryPolicy(base_delay=0, jitter=False))
+    assert db.dql("q", size=0) == {"hits": 1}
+    assert calls == ["POST", "POST"]
+
+
+def test_dql_get_escape_hatch_still_works():
+    seen, handler = _capture()
+    db = Diffbot(token="t", transport=httpx.MockTransport(handler))
+    db.request("GET", db.dql_url, params={"token": "t", "query": "q", "size": 1})
+    assert seen[0].method == "GET"
+    assert seen[0].url.params["query"] == "q"
+
+
+@pytest.mark.anyio
+async def test_async_dql_posts_json_body_with_token_in_query():
+    seen, handler = _capture()
+    db = DiffbotAsync(token="secret-tok", transport=httpx.MockTransport(handler))
+    await db.dql("type:Person", size=0, from_=2)
+    (req,) = seen
+    assert req.method == "POST"
+    assert req.url.params["token"] == "secret-tok"
+    assert "query" not in req.url.params
+    assert json.loads(req.content) == {"query": "type:Person", "size": 0, "from": 2}
+
+
+@pytest.mark.anyio
+async def test_async_dql_parallel_posts():
+    seen, handler = _capture()
+    db = DiffbotAsync(token="t", transport=httpx.MockTransport(handler))
+    await db.dql_parallel([{"query": "a", "size": 0}, {"query": "b", "size": 0}])
+    assert {r.method for r in seen} == {"POST"}
+    assert sorted(json.loads(r.content)["query"] for r in seen) == ["a", "b"]

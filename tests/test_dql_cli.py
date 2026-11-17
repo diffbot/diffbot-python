@@ -79,8 +79,8 @@ def test_cli_ontology_types(ontology_cache):
 
 def test_cli_probe_table(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params["size"] == "0"
-        hits = 5 if "Diffbot" in request.url.params["query"] else 100
+        assert json.loads(request.content)["size"] == 0
+        hits = 5 if "Diffbot" in json.loads(request.content)["query"] else 100
         return httpx.Response(200, json={"hits": hits, "results": 0})
 
     use_mock_client(monkeypatch, handler)
@@ -107,7 +107,7 @@ def test_cli_probe_json(monkeypatch):
 
 def test_cli_export_writes_file(monkeypatch, tmp_path):
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params["format"] == "csv"
+        assert json.loads(request.content)["format"] == "csv"
         return httpx.Response(200, content=b"Name\nDiffbot\n")
 
     use_mock_client(monkeypatch, handler)

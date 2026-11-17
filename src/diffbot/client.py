@@ -2,7 +2,7 @@
 
 import pathlib
 from types import TracebackType
-from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence, Type, Union
+from typing import Any, AsyncIterator, Dict, Iterator, List, Mapping, Optional, Sequence, Type, Union
 
 import httpx
 
@@ -215,7 +215,7 @@ class Diffbot:
         format: ExportFormat = "json",
         filter: Optional[str] = None,
         exportspec: Optional[str] = None,
-        extra: Optional[Dict[str, str]] = None,
+        extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
     ) -> Union[Dict[str, Any], bytes]:
         """Run a DQL query against the Diffbot Knowledge Graph.
@@ -415,7 +415,7 @@ class DiffbotAsync:
         format: ExportFormat = "json",
         filter: Optional[str] = None,
         exportspec: Optional[str] = None,
-        extra: Optional[Dict[str, str]] = None,
+        extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
     ) -> Union[Dict[str, Any], bytes]:
         """Run a DQL query against the Diffbot Knowledge Graph.

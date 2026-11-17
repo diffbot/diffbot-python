@@ -105,7 +105,7 @@ async def test_async_dql_fetch_ontology_returns_ontology():
 @pytest.mark.anyio
 async def test_async_dql_parallel_runs_all_queries():
     def handler(request: httpx.Request) -> httpx.Response:
-        q = request.url.params["query"]
+        q = json.loads(request.content)["query"]
         hits = 5 if "Diffbot" in q else 100
         return httpx.Response(200, json={"hits": hits, "results": 0})
 

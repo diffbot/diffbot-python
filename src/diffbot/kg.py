@@ -3,7 +3,7 @@
 import asyncio
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Union
 
 from ._constants import KG_BASE
 from .ontology import Ontology
@@ -16,28 +16,29 @@ KG_DQL_ENDPOINT = f"{KG_BASE}/kg/v3/dql"
 KG_ONTOLOGY_ENDPOINT = f"{KG_BASE}/kg/ontology"
 
 
-def _build_dql_params(
-    client: Any,
+def _build_dql_body(
     query: str,
     size: int,
     from_: int,
     format: ExportFormat,
     filter: Optional[str],
     exportspec: Optional[str],
-    extra: Optional[Dict[str, str]],
+    extra: Optional[Mapping[str, Any]],
 ) -> Dict[str, Any]:
-    params: Dict[str, Any] = {"token": client.token, "query": query, "size": size}
+    """JSON body for ``POST /kg/v3/dql`` (``DqlPostRequest``). The token is *not* part
+    of the body; it travels in the query string, as the spec's security scheme says."""
+    body: Dict[str, Any] = {"query": query, "size": size}
     if from_:
-        params["from"] = from_
+        body["from"] = from_
     if format != "json":
-        params["format"] = format
+        body["format"] = format
     if filter is not None:
-        params["filter"] = filter
+        body["filter"] = filter
     if exportspec is not None:
-        params["exportspec"] = exportspec
+        body["exportspec"] = exportspec
     if extra:
-        params.update(extra)
-    return params
+        body.update(extra)
+    return body
 
 
 def dql(
@@ -49,11 +50,11 @@ def dql(
     format: ExportFormat = "json",
     filter: Optional[str] = None,
     exportspec: Optional[str] = None,
-    extra: Optional[Dict[str, str]] = None,
+    extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
-    params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = client.request("GET", client.dql_url, params=params)
+    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
+    response = client.request("POST", client.dql_url, params={"token": client.token}, json=body)
     return response.content if raw else response.json()
 
 
@@ -66,11 +67,11 @@ async def dql_async(
     format: ExportFormat = "json",
     filter: Optional[str] = None,
     exportspec: Optional[str] = None,
-    extra: Optional[Dict[str, str]] = None,
+    extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
 ) -> Union[Dict[str, Any], bytes]:
-    params = _build_dql_params(client, query, size, from_, format, filter, exportspec, extra)
-    response = await client.request("GET", client.dql_url, params=params)
+    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
+    response = await client.request("POST", client.dql_url, params={"token": client.token}, json=body)
     return response.content if raw else response.json()
 
 
