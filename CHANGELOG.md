@@ -1,5 +1,48 @@
 # Changelog
 
+## 3.4.0 (unreleased)
+
+Named options on endpoints the SDK already calls, plus `nlp()` and two ontology
+helpers. Additive, except that invalid `snippet_length` values now raise (see
+Changed). The package version in `pyproject.toml` is bumped at release time.
+
+### Added
+
+- `dql()`/`dql_async()` (and so `dql_parallel`) keyword-only options `type`
+  (`"query"`, `"text"`, `"queryTextFallback"`, `"crawl"`; `"crawl"` searches crawl
+  collections), `col`, `filter_exclude`, `exportseparator`, `exportfile`,
+  `jsonmode`, `non_canonical_facts`, `no_dedup_articles`, `cluster`. They go in the
+  POST JSON body (wire names `filterExclude`, `nonCanonicalFacts`,
+  `noDedupArticles`); the token stays in the query string. Passing the same key as a
+  named option and in `extra` raises `ValidationError`. `report` and `view` are not
+  named; use `extra`. `size` still defaults to 10. Types: `DqlType`, `DqlJsonMode`,
+  `DqlCluster`, `DqlOptions`.
+- `crawl()` keyword-only create options `url_crawl_regex`, `url_process_regex`,
+  `page_process_pattern`, `max_to_crawl_per_subdomain`, `max_to_process_per_subdomain`,
+  `use_canonical`, `notify_webhook`, `notify_email` (query params on the existing
+  GET). `custom_headers` now accepts a string or a sequence of strings (sent as
+  repeated `customHeaders` params). Recurring-crawl admin (`repeat`, `maxRounds`, ...)
+  is not exposed.
+- `nlp(text, *, fields, lang, format, document_type, custom_summary)` (sync and
+  async) on the existing NL endpoint, single document. `fields` is a sequence of
+  `NlpField`; `format` may be `"plain text with title"`;
+  `custom_summary={"max_number_of_sentences": n}`. `entities()` is unchanged. Types:
+  `NlpField`, `NlpFormat`, `NlpCustomSummary`, `NlpResponse`.
+- `web_search(text=...)` accepts a string or 1-5 strings (repeated `text=` params on
+  the existing GET). Out-of-range lengths raise `ValidationError` before any request.
+- `dql_fetch_ontology_text()` (sync and async) returns the raw ontology JSON text;
+  `dql_refresh_ontology` is now also available on `DiffbotAsync` (module function
+  `diffbot.kg.dql_refresh_ontology_async`). `dql_fetch_ontology()` reuses the text fetch.
+- Live suite: `web_search` (single and two-value `text`) and `entities` + `nlp`.
+
+### Changed
+
+- **`web_search(snippet_length=...)` is validated** (parity with the TypeScript SDK):
+  the value is case-insensitive and must be one of `short`, `medium`, `long`, `full`;
+  anything else raises `ValidationError` instead of being sent upstream. Breaking only
+  for invalid input. `snippet_length` and `rerank` are undocumented upstream and
+  labelled so in the docstrings.
+
 ## 3.3.0 (unreleased)
 
 Response types, a pyright gate, and two small methods that complete existing

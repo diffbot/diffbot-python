@@ -32,6 +32,5 @@ the plan's wording, and what is unverified.
 
 ## Not in S1 (see plan §2/§8)
 
-S2 items (DQL named params, crawl-create options, `nlp()`, web-search multi-value
-`text` + `snippet_length` validation, ontology text/async parity) and everything marked
-Out.
+The S2 items that were listed here landed in S2: see `S2_LEFTOVERS.md`. Everything
+marked Out in the plan is still out.

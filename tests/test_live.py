@@ -45,6 +45,24 @@ def test_live_entities(db):
     assert "entities" in result
 
 
+def test_live_nlp_on_one_sentence(db):
+    sentence = "Diffbot is a company based in Menlo Park."
+    ents = db.entities(sentence)
+    assert "entities" in ents
+    result = db.nlp(sentence, fields=["entities", "sentiment", "language"])
+    assert isinstance(result, dict)
+    assert "entities" in result
+    assert "language" in result
+
+
+def test_live_web_search_single_and_two_value_text(db):
+    one = db.web_search("diffbot knowledge graph", num_results=1)
+    assert "search_results" in one
+    assert len(one["search_results"]) <= 1
+    two = db.web_search(["diffbot knowledge graph", "diffbot crawl api"], num_results=1)
+    assert "search_results" in two
+
+
 def _redacted(account) -> str:
     """Account bodies carry ``token``/``childTokens``: only ever show the other keys."""
     return f"keys={sorted(k for k in account if k not in ('token', 'childTokens'))}"
