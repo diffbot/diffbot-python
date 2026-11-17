@@ -3,6 +3,7 @@
 import asyncio
 import csv
 import io
+import json
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
 
 from .errors import JobError
+from .types import CrawlDownloadFormat, CrawlJob
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -47,7 +49,11 @@ def crawl(
     poll_interval: float = 2.0,
 ) -> Iterator[CrawlEvent]:
     """Create a crawler job and yield a JOB_CREATED event. If watch=True, poll until
-    completion and yield URL_PROCESSED events for each crawled URL."""
+    completion and yield URL_PROCESSED events for each crawled URL.
+
+    Recommended pattern for tools that can't block on a long crawl: start with
+    ``crawl(..., watch=False)``, poll :func:`crawl_get_job` until its
+    ``jobStatus.status`` is terminal, then fetch results with :func:`crawl_download`."""
     if not site.startswith("http"):
         site = f"https://{site}"
     if not job_name:
@@ -83,14 +89,9 @@ def crawl(
         job_status = jobs[0].get("jobStatus", {})
         status_code = job_status.get("status", 0)
 
-        urls_response = client.request(
-            "GET",
-            f"{client.crawler_url}/data",
-            params={"token": client.token, "name": job_name, "type": "urls"},
-            follow_redirects=True,
-        )
-        if urls_response.content:
-            for event in _parse_url_csv(urls_response.text, seen_urls):
+        urls_csv = crawl_download(client, job_name, format="csv", type="urls")
+        if urls_csv:
+            for event in _parse_url_csv(urls_csv, seen_urls):
                 yield event
 
         if status_code not in (0, 7):
@@ -201,14 +202,9 @@ async def crawl_async(
         job_status = jobs[0].get("jobStatus", {})
         status_code = job_status.get("status", 0)
 
-        urls_response = await client.request(
-            "GET",
-            f"{client.crawler_url}/data",
-            params={"token": client.token, "name": job_name, "type": "urls"},
-            follow_redirects=True,
-        )
-        if urls_response.content:
-            for event in _parse_url_csv(urls_response.text, seen_urls):
+        urls_csv = await crawl_download_async(client, job_name, format="csv", type="urls")
+        if urls_csv:
+            for event in _parse_url_csv(urls_csv, seen_urls):
                 yield event
 
         if status_code not in (0, 7):
@@ -220,12 +216,12 @@ async def crawl_async(
         await asyncio.sleep(poll_interval)
 
 
-async def crawl_list_jobs_async(client: "DiffbotAsync") -> List[Dict[str, Any]]:
+async def crawl_list_jobs_async(client: "DiffbotAsync") -> List[CrawlJob]:
     response = await client.request("GET", client.crawler_url, params={"token": client.token})
     return response.json().get("jobs", [])
 
 
-async def crawl_get_job_async(client: "DiffbotAsync", job_name: str) -> Dict[str, Any]:
+async def crawl_get_job_async(client: "DiffbotAsync", job_name: str) -> CrawlJob:
     response = await client.request(
         "GET",
         client.crawler_url,
@@ -245,12 +241,12 @@ async def crawl_delete_job_async(client: "DiffbotAsync", job_name: str) -> None:
     )
 
 
-def crawl_list_jobs(client: "Diffbot") -> List[Dict[str, Any]]:
+def crawl_list_jobs(client: "Diffbot") -> List[CrawlJob]:
     response = client.request("GET", client.crawler_url, params={"token": client.token})
     return response.json().get("jobs", [])
 
 
-def crawl_get_job(client: "Diffbot", job_name: str) -> Dict[str, Any]:
+def crawl_get_job(client: "Diffbot", job_name: str) -> CrawlJob:
     response = client.request(
         "GET",
         client.crawler_url,
@@ -268,3 +264,56 @@ def crawl_delete_job(client: "Diffbot", job_name: str) -> None:
         params={"token": client.token, "name": job_name, "delete": 1},
         retryable=False,
     )
+
+
+def _download_params(client: Any, name: str, format: CrawlDownloadFormat, type: Optional[str], num: Optional[int]) -> Dict[str, Any]:
+    params: Dict[str, Any] = {"token": client.token, "name": name}
+    if format == "csv":
+        params["format"] = "csv"
+    if type is not None:
+        params["type"] = type
+    if num is not None:
+        params["num"] = num
+    return params
+
+
+def _decode_download(text: str, format: CrawlDownloadFormat) -> Any:
+    if format == "csv":
+        return text
+    return json.loads(text) if text.strip() else []
+
+
+# The public, overloaded signatures live on ``Diffbot.crawl_download`` /
+# ``DiffbotAsync.crawl_download`` (``format="csv"`` -> ``str``, else records).
+def crawl_download(
+    client: "Diffbot",
+    name: str,
+    *,
+    format: CrawlDownloadFormat = "json",
+    type: Optional[str] = None,
+    num: Optional[int] = None,
+) -> Any:
+    response = client.request(
+        "GET",
+        f"{client.crawler_url}/data",
+        params=_download_params(client, name, format, type, num),
+        follow_redirects=True,
+    )
+    return _decode_download(response.text, format)
+
+
+async def crawl_download_async(
+    client: "DiffbotAsync",
+    name: str,
+    *,
+    format: CrawlDownloadFormat = "json",
+    type: Optional[str] = None,
+    num: Optional[int] = None,
+) -> Any:
+    response = await client.request(
+        "GET",
+        f"{client.crawler_url}/data",
+        params=_download_params(client, name, format, type, num),
+        follow_redirects=True,
+    )
+    return _decode_download(response.text, format)

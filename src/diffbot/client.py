@@ -2,7 +2,7 @@
 
 import pathlib
 from types import TracebackType
-from typing import Any, AsyncIterator, Dict, Iterator, List, Mapping, Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Literal, Mapping, Optional, Sequence, Type, Union, overload
 
 import httpx
 
@@ -16,7 +16,45 @@ from ._transport import (
     resolve_retry_policy,
 )
 from .errors import ValidationError
-from .types import ChatMessage, ExportFormat, ResponseFormat, SnippetLength
+from .types import (
+    AccountResponse,
+    AnalyzeExtractOptions,
+    ArticleExtractOptions,
+    ArticleExtractResponse,
+    ChatMessage,
+    CrawlDataRecord,
+    CrawlDownloadFormat,
+    CrawlJob,
+    CustomExtractOptions,
+    DiscussionExtractOptions,
+    DiscussionExtractResponse,
+    DqlEntity,
+    DqlResponse,
+    EntitiesResponse,
+    EventExtractOptions,
+    EventExtractResponse,
+    ExportFormat,
+    ExtractResponse,
+    ImageExtractOptions,
+    ImageExtractResponse,
+    JobExtractOptions,
+    JobExtractResponse,
+    ListExtractOptions,
+    ListExtractResponse,
+    ProductExtractOptions,
+    ProductExtractResponse,
+    ResponseFormat,
+    SnippetLength,
+    VideoExtractOptions,
+    VideoExtractResponse,
+    WebSearchResponse,
+)
+from .account import (
+    account as _account,
+    account_async as _account_async,
+    verify_token as _verify_token,
+    verify_token_async as _verify_token_async,
+)
 from .extract import extract as _extract, extract_async as _extract_async
 from .ask import (
     ask as _ask,
@@ -30,6 +68,8 @@ from .crawl import (
     crawl_async as _crawl_async,
     crawl_delete_job as _crawl_delete_job,
     crawl_delete_job_async as _crawl_delete_job_async,
+    crawl_download as _crawl_download,
+    crawl_download_async as _crawl_download_async,
     crawl_get_job as _crawl_get_job,
     crawl_get_job_async as _crawl_get_job_async,
     crawl_list_jobs as _crawl_list_jobs,
@@ -53,6 +93,11 @@ from .nlp import (
     entities as _entities,
     entities_async as _entities_async,
 )
+
+
+if TYPE_CHECKING:
+    # Only the type checker needs this (``**options: Unpack[...]`` in the overloads below).
+    from typing_extensions import Unpack
 
 
 class Diffbot:
@@ -96,6 +141,7 @@ class Diffbot:
         # still allowing a single endpoint to be overridden independently.
         self.analyze_url = analyze_url or f"{api_base}/v3"
         self.crawler_url = crawler_url or f"{api_base}/v3/crawl"
+        self.account_url = f"{api_base}/v4/account"
         self.llm_url = llm_url or f"{llm_base}/rag/v1/chat/completions"
         self.web_search_url = web_search_url or f"{llm_base}/api/v1/web_search"
         self.nlp_url = nlp_url or f"{nlp_base}/v1/"
@@ -159,9 +205,57 @@ class Diffbot:
             stream=stream,
         )
 
-    def extract(self, url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
-        """Extract structured content from a URL. Returns the raw Diffbot API response."""
-        return _extract(self, url, api=api, fmt=fmt)
+    @overload
+    def extract(
+        self, url: str, api: Literal["analyze"] = "analyze", fmt: str = ..., **options: "Unpack[AnalyzeExtractOptions]"
+    ) -> ExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["article"], fmt: str = ..., **options: "Unpack[ArticleExtractOptions]"
+    ) -> ArticleExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["product"], fmt: str = ..., **options: "Unpack[ProductExtractOptions]"
+    ) -> ProductExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["discussion"], fmt: str = ..., **options: "Unpack[DiscussionExtractOptions]"
+    ) -> DiscussionExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["job"], fmt: str = ..., **options: "Unpack[JobExtractOptions]"
+    ) -> JobExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["image"], fmt: str = ..., **options: "Unpack[ImageExtractOptions]"
+    ) -> ImageExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["video"], fmt: str = ..., **options: "Unpack[VideoExtractOptions]"
+    ) -> VideoExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["list"], fmt: str = ..., **options: "Unpack[ListExtractOptions]"
+    ) -> ListExtractResponse: ...
+    @overload
+    def extract(
+        self, url: str, api: Literal["event"], fmt: str = ..., **options: "Unpack[EventExtractOptions]"
+    ) -> EventExtractResponse: ...
+    @overload
+    def extract(self, url: str, api: str, fmt: str = ..., **options: "Unpack[CustomExtractOptions]") -> ExtractResponse: ...
+    def extract(self, url: str, api: str = "analyze", fmt: str = "markdown", **options: Any) -> Any:
+        """Extract structured content from a URL. Returns the raw Diffbot API response.
+
+        Keyword options (all optional, additive): ``timeout`` (server-side fetch
+        timeout in ms, default 30000; the transport timeout is raised to at least
+        ``timeout + 10s``), ``mode`` (overrides the ``fmt="markdown"`` -> ``llm``
+        mapping), ``fields`` (sequence of field names, comma-joined), ``fallback``,
+        ``discussion``, ``paging``, ``max_pages``, ``natural_language``,
+        ``summary_num_sentences``, ``max_tags``, ``tag_confidence``,
+        ``category_confidence``, ``use_proxy``, and ``extra`` (a mapping of extra wire
+        parameters, e.g. ``proxy``/``proxyAuth``). Which apply depends on ``api``.
+        """
+        return _extract(self, url, api=api, fmt=fmt, **options)
 
     def ask(
         self,
@@ -191,21 +285,77 @@ class Diffbot:
         return _ask_json(self, messages, schema, response_format=response_format)
 
     def crawl(self, site: str, **kwargs: Any) -> Iterator[CrawlEvent]:
-        """Start a crawl job."""
+        """Start a crawl job.
+
+        For tools that can't block on a long crawl, use ``crawl(site, watch=False)``
+        (the default), poll :meth:`crawl_get_job`, then fetch results with
+        :meth:`crawl_download`.
+        """
         yield from _crawl(self, site, **kwargs)
 
-    def crawl_list_jobs(self) -> List[Dict[str, Any]]:
+    def crawl_list_jobs(self) -> List[CrawlJob]:
         """List all crawler jobs for this token."""
         return _crawl_list_jobs(self)
 
-    def crawl_get_job(self, job_name: str) -> Dict[str, Any]:
-        """Get the status of a crawler job."""
+    def crawl_get_job(self, job_name: str) -> CrawlJob:
+        """Get a crawler job's record, or ``{}`` if no such job exists (the TypeScript SDK
+        returns ``undefined`` there; Python keeps ``{}`` so ``job.get(...)`` stays safe)."""
         return _crawl_get_job(self, job_name)
+
+    @overload
+    def crawl_download(self, name: str, *, format: Literal["csv"], type: Optional[str] = ..., num: Optional[int] = ...) -> str: ...
+    @overload
+    def crawl_download(
+        self, name: str, *, format: Literal["json"] = ..., type: Optional[str] = ..., num: Optional[int] = ...
+    ) -> List[CrawlDataRecord]: ...
+    @overload
+    def crawl_download(
+        self, name: str, *, format: CrawlDownloadFormat, type: Optional[str] = ..., num: Optional[int] = ...
+    ) -> Union[str, List[CrawlDataRecord]]: ...
+    def crawl_download(
+        self,
+        name: str,
+        *,
+        format: CrawlDownloadFormat = "json",
+        type: Optional[str] = None,
+        num: Optional[int] = None,
+    ) -> Any:
+        """Download a crawl job's results (``GET /v3/crawl/data``).
+
+        ``format="json"`` (default) returns a list of records; ``format="csv"``
+        returns the CSV text. ``type`` selects the report (e.g. ``"urls"``) and
+        ``num`` caps the number of records.
+        """
+        return _crawl_download(self, name, format=format, type=type, num=num)
 
     def crawl_delete_job(self, job_name: str) -> None:
         """Delete a crawler job."""
         _crawl_delete_job(self, job_name)
 
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True],
+    ) -> bytes: ...
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> str: ...
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> bytes: ...
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> Iterator[DqlEntity]: ...
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> DqlResponse: ...
+    @overload
+    def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ...
+    ) -> Union[DqlResponse, str, bytes, Iterator[DqlEntity]]: ...
     def dql(
         self,
         query: str,
@@ -217,16 +367,19 @@ class Diffbot:
         exportspec: Optional[str] = None,
         extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
-    ) -> Union[Dict[str, Any], bytes]:
-        """Run a DQL query against the Diffbot Knowledge Graph.
+    ) -> Any:
+        """Run a DQL query against the Diffbot Knowledge Graph (sent as ``POST`` with a JSON body).
 
-        Returns the parsed JSON response, or the raw response bytes when raw=True
-        (e.g. to retrieve CSV/export formats undecoded).
+        Return type follows the arguments: ``DqlResponse`` for ``format="json"``
+        (default); ``str`` for ``"csv"``; ``bytes`` for ``"xls"``/``"xlsx"`` or any
+        format with ``raw=True`` (the undecoded response); an iterator of
+        ``DqlEntity`` for ``"jsonl"``.
         """
         return _dql(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw)
 
-    def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Union[Dict[str, Any], bytes]]:
-        """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args."""
+    def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Any]:
+        """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args;
+        each result's type follows that call, as for dql()."""
         return _dql_parallel(self, queries, workers=workers)
 
     def dql_refresh_ontology(self, dest: pathlib.Path) -> None:
@@ -244,7 +397,7 @@ class Diffbot:
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
         snippet_length: Optional[SnippetLength] = None,
-    ) -> Dict[str, Any]:
+    ) -> WebSearchResponse:
         """Search the web via the Diffbot LLM web search API.
 
         snippet_length: "short", "medium", "long" or "full" — how much of each
@@ -254,7 +407,22 @@ class Diffbot:
         """
         return _web_search(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
-    def entities(self, text: str, *, lang: str = "auto") -> Dict[str, Any]:
+    def account(self, days: Optional[int] = None) -> AccountResponse:
+        """Account details and usage (``GET /v4/account``; free). ``days`` limits the usage window.
+
+        The response includes ``token`` and ``childTokens``: never log or print it whole.
+        """
+        return _account(self, days)
+
+    def verify_token(self) -> bool:
+        """``True`` if the token is accepted, ``False`` on an auth failure (401/403).
+
+        Calls :meth:`account` with ``days=1``. Any other failure (network, 5xx, rate
+        limit) propagates rather than reading as "invalid token".
+        """
+        return _verify_token(self)
+
+    def entities(self, text: str, *, lang: str = "auto") -> EntitiesResponse:
         """Identify and resolve entities and sentiment in text using the Diffbot NLP API.
 
         Entity IDs can be looked up in the Knowledge Graph via dql() using
@@ -299,6 +467,7 @@ class DiffbotAsync:
         self.nlp_base = nlp_base
         self.analyze_url = analyze_url or f"{api_base}/v3"
         self.crawler_url = crawler_url or f"{api_base}/v3/crawl"
+        self.account_url = f"{api_base}/v4/account"
         self.llm_url = llm_url or f"{llm_base}/rag/v1/chat/completions"
         self.web_search_url = web_search_url or f"{llm_base}/api/v1/web_search"
         self.nlp_url = nlp_url or f"{nlp_base}/v1/"
@@ -357,9 +526,57 @@ class DiffbotAsync:
             stream=stream,
         )
 
-    async def extract(self, url: str, api: str = "analyze", fmt: str = "markdown") -> Dict[str, Any]:
-        """Extract structured content from a URL. Returns the raw Diffbot API response."""
-        return await _extract_async(self, url, api=api, fmt=fmt)
+    @overload
+    async def extract(
+        self, url: str, api: Literal["analyze"] = "analyze", fmt: str = ..., **options: "Unpack[AnalyzeExtractOptions]"
+    ) -> ExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["article"], fmt: str = ..., **options: "Unpack[ArticleExtractOptions]"
+    ) -> ArticleExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["product"], fmt: str = ..., **options: "Unpack[ProductExtractOptions]"
+    ) -> ProductExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["discussion"], fmt: str = ..., **options: "Unpack[DiscussionExtractOptions]"
+    ) -> DiscussionExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["job"], fmt: str = ..., **options: "Unpack[JobExtractOptions]"
+    ) -> JobExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["image"], fmt: str = ..., **options: "Unpack[ImageExtractOptions]"
+    ) -> ImageExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["video"], fmt: str = ..., **options: "Unpack[VideoExtractOptions]"
+    ) -> VideoExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["list"], fmt: str = ..., **options: "Unpack[ListExtractOptions]"
+    ) -> ListExtractResponse: ...
+    @overload
+    async def extract(
+        self, url: str, api: Literal["event"], fmt: str = ..., **options: "Unpack[EventExtractOptions]"
+    ) -> EventExtractResponse: ...
+    @overload
+    async def extract(self, url: str, api: str, fmt: str = ..., **options: "Unpack[CustomExtractOptions]") -> ExtractResponse: ...
+    async def extract(self, url: str, api: str = "analyze", fmt: str = "markdown", **options: Any) -> Any:
+        """Extract structured content from a URL. Returns the raw Diffbot API response.
+
+        Keyword options (all optional, additive): ``timeout`` (server-side fetch
+        timeout in ms, default 30000; the transport timeout is raised to at least
+        ``timeout + 10s``), ``mode`` (overrides the ``fmt="markdown"`` -> ``llm``
+        mapping), ``fields`` (sequence of field names, comma-joined), ``fallback``,
+        ``discussion``, ``paging``, ``max_pages``, ``natural_language``,
+        ``summary_num_sentences``, ``max_tags``, ``tag_confidence``,
+        ``category_confidence``, ``use_proxy``, and ``extra`` (a mapping of extra wire
+        parameters, e.g. ``proxy``/``proxyAuth``). Which apply depends on ``api``.
+        """
+        return await _extract_async(self, url, api=api, fmt=fmt, **options)
 
     async def ask(
         self,
@@ -394,18 +611,69 @@ class DiffbotAsync:
         async for event in _crawl_async(self, site, **kwargs):
             yield event
 
-    async def crawl_list_jobs(self) -> List[Dict[str, Any]]:
+    async def crawl_list_jobs(self) -> List[CrawlJob]:
         """List all crawler jobs for this token."""
         return await _crawl_list_jobs_async(self)
 
-    async def crawl_get_job(self, job_name: str) -> Dict[str, Any]:
-        """Get the status of a crawler job."""
+    async def crawl_get_job(self, job_name: str) -> CrawlJob:
+        """Get a crawler job's record, or ``{}`` if no such job exists (the TypeScript SDK
+        returns ``undefined`` there; Python keeps ``{}`` so ``job.get(...)`` stays safe)."""
         return await _crawl_get_job_async(self, job_name)
+
+    @overload
+    async def crawl_download(self, name: str, *, format: Literal["csv"], type: Optional[str] = ..., num: Optional[int] = ...) -> str: ...
+    @overload
+    async def crawl_download(
+        self, name: str, *, format: Literal["json"] = ..., type: Optional[str] = ..., num: Optional[int] = ...
+    ) -> List[CrawlDataRecord]: ...
+    @overload
+    async def crawl_download(
+        self, name: str, *, format: CrawlDownloadFormat, type: Optional[str] = ..., num: Optional[int] = ...
+    ) -> Union[str, List[CrawlDataRecord]]: ...
+    async def crawl_download(
+        self,
+        name: str,
+        *,
+        format: CrawlDownloadFormat = "json",
+        type: Optional[str] = None,
+        num: Optional[int] = None,
+    ) -> Any:
+        """Download a crawl job's results (``GET /v3/crawl/data``).
+
+        ``format="json"`` (default) returns a list of records; ``format="csv"``
+        returns the CSV text. ``type`` selects the report (e.g. ``"urls"``) and
+        ``num`` caps the number of records.
+        """
+        return await _crawl_download_async(self, name, format=format, type=type, num=num)
 
     async def crawl_delete_job(self, job_name: str) -> None:
         """Delete a crawler job."""
         await _crawl_delete_job_async(self, job_name)
 
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True],
+    ) -> bytes: ...
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> str: ...
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> bytes: ...
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> AsyncIterator[DqlEntity]: ...
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+    ) -> DqlResponse: ...
+    @overload
+    async def dql(
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ...
+    ) -> Union[DqlResponse, str, bytes, AsyncIterator[DqlEntity]]: ...
     async def dql(
         self,
         query: str,
@@ -417,16 +685,19 @@ class DiffbotAsync:
         exportspec: Optional[str] = None,
         extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
-    ) -> Union[Dict[str, Any], bytes]:
-        """Run a DQL query against the Diffbot Knowledge Graph.
+    ) -> Any:
+        """Run a DQL query against the Diffbot Knowledge Graph (sent as ``POST`` with a JSON body).
 
-        Returns the parsed JSON response, or the raw response bytes when raw=True
-        (e.g. to retrieve CSV/export formats undecoded).
+        Return type follows the arguments: ``DqlResponse`` for ``format="json"``
+        (default); ``str`` for ``"csv"``; ``bytes`` for ``"xls"``/``"xlsx"`` or any
+        format with ``raw=True`` (the undecoded response); an iterator of
+        ``DqlEntity`` for ``"jsonl"``.
         """
         return await _dql_async(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw)
 
-    async def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Union[Dict[str, Any], bytes]]:
-        """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args."""
+    async def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Any]:
+        """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args;
+        each result's type follows that call, as for dql()."""
         return await _dql_parallel_async(self, queries, workers=workers)
 
     async def dql_fetch_ontology(self) -> Ontology:
@@ -440,7 +711,7 @@ class DiffbotAsync:
         num_results: Optional[int] = None,
         max_tokens: Optional[int] = None,
         snippet_length: Optional[SnippetLength] = None,
-    ) -> Dict[str, Any]:
+    ) -> WebSearchResponse:
         """Search the web via the Diffbot LLM web search API.
 
         snippet_length: "short", "medium", "long" or "full" — how much of each
@@ -450,7 +721,22 @@ class DiffbotAsync:
         """
         return await _web_search_async(self, text, num_results=num_results, max_tokens=max_tokens, snippet_length=snippet_length)
 
-    async def entities(self, text: str, *, lang: str = "auto") -> Dict[str, Any]:
+    async def account(self, days: Optional[int] = None) -> AccountResponse:
+        """Account details and usage (``GET /v4/account``; free). ``days`` limits the usage window.
+
+        The response includes ``token`` and ``childTokens``: never log or print it whole.
+        """
+        return await _account_async(self, days)
+
+    async def verify_token(self) -> bool:
+        """``True`` if the token is accepted, ``False`` on an auth failure (401/403).
+
+        Calls :meth:`account` with ``days=1``. Any other failure (network, 5xx, rate
+        limit) propagates rather than reading as "invalid token".
+        """
+        return await _verify_token_async(self)
+
+    async def entities(self, text: str, *, lang: str = "auto") -> EntitiesResponse:
         """Identify and resolve entities and sentiment in text using the Diffbot NLP API.
 
         Entity IDs can be looked up in the Knowledge Graph via dql() using

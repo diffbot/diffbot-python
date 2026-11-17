@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ._constants import LLM_BASE
-from .types import SnippetLength
+from .types import SnippetLength, WebSearchResponse
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -39,7 +39,7 @@ def web_search(
     num_results: Optional[int] = None,
     max_tokens: Optional[int] = None,
     snippet_length: Optional[SnippetLength] = None,
-) -> Dict[str, Any]:
+) -> WebSearchResponse:
     headers, params = _build_web_search_request(client, text, num_results, max_tokens, snippet_length)
     response = client.request("GET", client.web_search_url, headers=headers, params=params)
     return response.json()
@@ -52,7 +52,7 @@ async def web_search_async(
     num_results: Optional[int] = None,
     max_tokens: Optional[int] = None,
     snippet_length: Optional[SnippetLength] = None,
-) -> Dict[str, Any]:
+) -> WebSearchResponse:
     headers, params = _build_web_search_request(client, text, num_results, max_tokens, snippet_length)
     response = await client.request("GET", client.web_search_url, headers=headers, params=params)
     return response.json()

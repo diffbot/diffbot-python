@@ -1,13 +1,14 @@
 """Diffbot Knowledge Graph APIs: DQL search and the ontology."""
 
 import asyncio
+import json
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Mapping, Optional, Sequence
 
 from ._constants import KG_BASE
 from .ontology import Ontology
-from .types import ExportFormat
+from .types import DqlEntity, ExportFormat
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -41,6 +42,32 @@ def _build_dql_body(
     return body
 
 
+def _decode_dql(response: Any, format: ExportFormat, raw: bool) -> Any:
+    """Decode a DQL response by ``format``: json -> dict, csv -> str, xls/xlsx -> bytes,
+    jsonl -> iterator of entities. ``raw=True`` always returns the undecoded bytes."""
+    if raw or format in ("xls", "xlsx"):
+        return response.content
+    if format == "csv":
+        return response.text
+    if format == "jsonl":
+        return _iter_jsonl(response.text)
+    return response.json()
+
+
+def _iter_jsonl(text: str) -> Iterator[DqlEntity]:
+    for line in text.splitlines():
+        if line.strip():
+            yield json.loads(line)
+
+
+async def _aiter_jsonl(text: str) -> AsyncIterator[DqlEntity]:
+    for line in text.splitlines():
+        if line.strip():
+            yield json.loads(line)
+
+
+# The public, overloaded signatures live on ``Diffbot.dql`` / ``DiffbotAsync.dql``;
+# these module-level implementations return ``Any`` and are shared by both.
 def dql(
     client: "Diffbot",
     query: str,
@@ -52,10 +79,10 @@ def dql(
     exportspec: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
-) -> Union[Dict[str, Any], bytes]:
+) -> Any:
     body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
     response = client.request("POST", client.dql_url, params={"token": client.token}, json=body)
-    return response.content if raw else response.json()
+    return _decode_dql(response, format, raw)
 
 
 async def dql_async(
@@ -69,10 +96,12 @@ async def dql_async(
     exportspec: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
-) -> Union[Dict[str, Any], bytes]:
+) -> Any:
     body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
     response = await client.request("POST", client.dql_url, params={"token": client.token}, json=body)
-    return response.content if raw else response.json()
+    if not raw and format == "jsonl":
+        return _aiter_jsonl(response.text)
+    return _decode_dql(response, format, raw)
 
 
 def dql_parallel(
@@ -80,7 +109,7 @@ def dql_parallel(
     queries: Sequence[Dict[str, Any]],
     *,
     workers: int = 8,
-) -> List[Union[Dict[str, Any], bytes]]:
+) -> List[Any]:
     if not queries:
         return []
     with ThreadPoolExecutor(max_workers=min(workers, len(queries))) as ex:
@@ -92,16 +121,16 @@ async def dql_parallel_async(
     queries: Sequence[Dict[str, Any]],
     *,
     workers: int = 8,
-) -> List[Union[Dict[str, Any], bytes]]:
+) -> List[Any]:
     if not queries:
         return []
     sem = asyncio.Semaphore(workers)
 
-    async def _one(q: Dict[str, Any]) -> Union[Dict[str, Any], bytes]:
+    async def _one(q: Dict[str, Any]) -> Any:
         async with sem:
             return await dql_async(client, **q)
 
-    return await asyncio.gather(*(_one(q) for q in queries))
+    return list(await asyncio.gather(*(_one(q) for q in queries)))
 
 
 def dql_refresh_ontology(client: "Diffbot", dest: pathlib.Path) -> None:

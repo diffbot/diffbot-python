@@ -2,6 +2,7 @@ import json
 import re
 import sys
 import textwrap
+from typing import List, Optional
 from email.utils import parsedate_to_datetime
 
 import click
@@ -17,6 +18,7 @@ from diffbot import (
     AuthError,
     ExtractionError,
     APIError,
+    ChatMessage,
     ValidationError,
     json_schema_format,
 )
@@ -100,7 +102,7 @@ def extract(url, output, fmt, api):
     type=click.Path(exists=True, dir_okay=False),
     help="JSON Schema file constraining the output (implies --json)",
 )
-def ask(prompt: str, output: str = None, as_json: bool = False, schema_path: str = None):
+def ask(prompt: str, output: Optional[str] = None, as_json: bool = False, schema_path: Optional[str] = None):
     """Ask a question to the Diffbot LLM"""
     db = get_client()
     stdin_content = sys.stdin.read() if not sys.stdin.isatty() else None
@@ -119,7 +121,7 @@ def ask(prompt: str, output: str = None, as_json: bool = False, schema_path: str
     # permissive default; --json alone must not become {"type": "json_object"}.
     interactive_mode = is_interactive and not output and not as_json
 
-    messages = [
+    messages: List[ChatMessage] = [
         {
             "role": "system",
             "content": f"Current local time: {datetime.now().strftime('%A, %B %d, %Y, %I:%M:%S %p %Z')}",

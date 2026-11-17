@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, Dict
 
 from ._constants import NLP_HOST_BASE
+from .types import EntitiesResponse
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -16,8 +17,8 @@ def entities(
     text: str,
     *,
     lang: str = "auto",
-) -> Dict[str, Any]:
-    params = {"token": client.token, "fields": NLP_FIELDS}
+) -> EntitiesResponse:
+    params: Dict[str, Any] = {"token": client.token, "fields": NLP_FIELDS}
     payload = [{"lang": lang, "format": "plain text", "content": text}]
     response = client.request("POST", client.nlp_url, params=params, json=payload)
     data = response.json()
@@ -29,8 +30,8 @@ async def entities_async(
     text: str,
     *,
     lang: str = "auto",
-) -> Dict[str, Any]:
-    params = {"token": client.token, "fields": NLP_FIELDS}
+) -> EntitiesResponse:
+    params: Dict[str, Any] = {"token": client.token, "fields": NLP_FIELDS}
     payload = [{"lang": lang, "format": "plain text", "content": text}]
     response = await client.request("POST", client.nlp_url, params=params, json=payload)
     data = response.json()

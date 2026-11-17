@@ -215,3 +215,60 @@ async def test_async_dql_parallel_posts():
     await db.dql_parallel([{"query": "a", "size": 0}, {"query": "b", "size": 0}])
     assert {r.method for r in seen} == {"POST"}
     assert sorted(json.loads(r.content)["query"] for r in seen) == ["a", "b"]
+
+
+"""
+Return decoding per format (csv/jsonl used to crash in response.json())
+"""
+
+JSONL = b'{"score": 1, "entity": {"name": "A"}}\n\n{"score": 2, "entity": {"name": "B"}}\n'
+
+
+def _mk(content, **kw):
+    return Diffbot(token="t", transport=httpx.MockTransport(lambda r: httpx.Response(200, content=content, **kw)))
+
+
+def test_dql_csv_returns_text():
+    assert _mk(b"Name\nDiffbot\n").dql("q", format="csv") == "Name\nDiffbot\n"
+
+
+def test_dql_csv_raw_returns_bytes():
+    assert _mk(b"Name\nDiffbot\n").dql("q", format="csv", raw=True) == b"Name\nDiffbot\n"
+
+
+@pytest.mark.parametrize("fmt", ["xls", "xlsx"])
+def test_dql_excel_returns_bytes(fmt):
+    payload = bytes(range(256))
+    assert _mk(payload).dql("q", format=fmt) == payload
+
+
+def test_dql_jsonl_returns_entity_iterator():
+    result = _mk(JSONL).dql("q", format="jsonl")
+    assert not isinstance(result, (list, dict, bytes, str))
+    assert [e["score"] for e in result] == [1, 2]
+
+
+def test_dql_jsonl_raw_returns_bytes():
+    assert _mk(JSONL).dql("q", format="jsonl", raw=True) == JSONL
+
+
+def test_dql_json_raw_returns_bytes():
+    assert _mk(b'{"hits": 1}').dql("q", raw=True) == b'{"hits": 1}'
+
+
+def test_dql_parallel_decodes_each_format():
+    results = _mk(b"a,b\n").dql_parallel([{"query": "q", "format": "csv"}] * 2)
+    assert results == ["a,b\n", "a,b\n"]
+
+
+@pytest.mark.anyio
+async def test_async_dql_formats():
+    def adb(content):
+        return DiffbotAsync(token="t", transport=httpx.MockTransport(lambda r: httpx.Response(200, content=content)))
+
+    assert await adb(b"x\n").dql("q", format="csv") == "x\n"
+    assert await adb(b"\x00\x01").dql("q", format="xlsx") == b"\x00\x01"
+    assert await adb(b"x\n").dql("q", format="csv", raw=True) == b"x\n"
+    entities = [e async for e in await adb(JSONL).dql("q", format="jsonl")]
+    assert [e["score"] for e in entities] == [1, 2]
+    assert await adb(JSONL).dql("q", format="jsonl", raw=True) == JSONL

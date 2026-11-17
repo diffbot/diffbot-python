@@ -129,7 +129,7 @@ def entities(text, fmt, lang):
             color = _PALETTE[i % len(_PALETTE)]
             name = e.get("name") or e.get("label") or ""
             all_types = e.get("allTypes") or []
-            etype = all_types[0]["name"] if all_types else (e.get("type") or "")
+            etype = all_types[0].get("name", "") if all_types else (e.get("type") or "")
             confidence = e.get("confidence")
             salience = e.get("salience")
             sentiment = e.get("sentiment")

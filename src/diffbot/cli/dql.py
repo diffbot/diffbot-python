@@ -5,6 +5,7 @@ import pathlib
 import re
 import shutil
 import time
+from typing import cast
 
 import click
 import sys
@@ -12,7 +13,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from diffbot import DiffbotError
+from diffbot import DiffbotError, ExportFormat
 
 from . import ontology
 from diffbot import resolve_token
@@ -258,7 +259,7 @@ def export(query: str, out, fmt: str, exportspec, size: int, from_: int, filter_
             query,
             size=size,
             from_=from_,
-            format=fmt,
+            format=cast(ExportFormat, fmt),
             exportspec=resolved_spec or None,
             filter=filter_,
             raw=True,
