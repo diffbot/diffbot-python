@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence, Union
 
 from .errors import APIError, JobError
 from .types import CrawlDownloadFormat, CrawlJob
@@ -44,9 +44,18 @@ def crawl(
     url_process_pattern: Optional[str] = None,
     obey_robots: bool = False,
     use_proxies: bool = False,
-    custom_headers: Optional[str] = None,
+    custom_headers: Optional[Union[str, Sequence[str]]] = None,
     watch: bool = False,
     poll_interval: float = 2.0,
+    *,
+    url_crawl_regex: Optional[str] = None,
+    url_process_regex: Optional[str] = None,
+    page_process_pattern: Optional[str] = None,
+    max_to_crawl_per_subdomain: Optional[int] = None,
+    max_to_process_per_subdomain: Optional[int] = None,
+    use_canonical: Optional[bool] = None,
+    notify_webhook: Optional[str] = None,
+    notify_email: Optional[str] = None,
 ) -> Iterator[CrawlEvent]:
     """Create a crawler job and yield a JOB_CREATED event. If watch=True, poll until
     completion and yield URL_PROCESSED events for each crawled URL.
@@ -56,7 +65,11 @@ def crawl(
 
     Recommended pattern for tools that can't block on a long crawl: start with
     ``crawl(..., watch=False)``, poll :func:`crawl_get_job` until its
-    ``jobStatus.status`` is terminal, then fetch results with :func:`crawl_download`."""
+    ``jobStatus.status`` is terminal, then fetch results with :func:`crawl_download`.
+
+    Create options are sent as query params on the existing GET. ``custom_headers`` is
+    one ``"Name: value"`` string or a sequence of them (sent as repeated params).
+    Recurring-crawl admin (``repeat``, ``maxRounds``, ...) is not exposed."""
     if not site.startswith("http"):
         site = f"https://{site}"
     if not job_name:
@@ -66,6 +79,16 @@ def crawl(
         client, job_name, site, max_to_crawl, max_to_process, hops, restrict_domain,
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
+        {
+            "urlCrawlRegEx": url_crawl_regex,
+            "urlProcessRegEx": url_process_regex,
+            "pageProcessPattern": page_process_pattern,
+            "maxToCrawlPerSubdomain": max_to_crawl_per_subdomain,
+            "maxToProcessPerSubdomain": max_to_process_per_subdomain,
+            "useCanonical": None if use_canonical is None else int(use_canonical),
+            "notifyWebhook": notify_webhook,
+            "notifyEmail": notify_email,
+        },
     )
     _raise_on_create_error(client.request("GET", client.crawler_url, params=params))
 
@@ -123,7 +146,8 @@ def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int
                         max_to_process: int, hops: int, restrict_domain: bool,
                         api_url: str, crawl_delay: float, url_crawl_pattern: Optional[str],
                         url_process_pattern: Optional[str], obey_robots: bool,
-                        use_proxies: bool, custom_headers: Optional[str]) -> Dict[str, Any]:
+                        use_proxies: bool, custom_headers: Optional[Union[str, Sequence[str]]],
+                        named: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     params: Dict[str, Any] = {
         "token": client.token,
         "name": job_name,
@@ -146,7 +170,10 @@ def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int
     if use_proxies:
         params["useProxies"] = 1
     if custom_headers:
-        params["customHeaders"] = custom_headers
+        # a sequence becomes repeated ``customHeaders=`` params; a lone string stays a plain value
+        params["customHeaders"] = custom_headers if isinstance(custom_headers, str) else list(custom_headers)
+    if named:
+        params.update({k: v for k, v in named.items() if v is not None})
     return params
 
 
@@ -179,9 +206,18 @@ async def crawl_async(
     url_process_pattern: Optional[str] = None,
     obey_robots: bool = False,
     use_proxies: bool = False,
-    custom_headers: Optional[str] = None,
+    custom_headers: Optional[Union[str, Sequence[str]]] = None,
     watch: bool = False,
     poll_interval: float = 2.0,
+    *,
+    url_crawl_regex: Optional[str] = None,
+    url_process_regex: Optional[str] = None,
+    page_process_pattern: Optional[str] = None,
+    max_to_crawl_per_subdomain: Optional[int] = None,
+    max_to_process_per_subdomain: Optional[int] = None,
+    use_canonical: Optional[bool] = None,
+    notify_webhook: Optional[str] = None,
+    notify_email: Optional[str] = None,
 ) -> AsyncIterator[CrawlEvent]:
     if not site.startswith("http"):
         site = f"https://{site}"
@@ -192,6 +228,16 @@ async def crawl_async(
         client, job_name, site, max_to_crawl, max_to_process, hops, restrict_domain,
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
+        {
+            "urlCrawlRegEx": url_crawl_regex,
+            "urlProcessRegEx": url_process_regex,
+            "pageProcessPattern": page_process_pattern,
+            "maxToCrawlPerSubdomain": max_to_crawl_per_subdomain,
+            "maxToProcessPerSubdomain": max_to_process_per_subdomain,
+            "useCanonical": None if use_canonical is None else int(use_canonical),
+            "notifyWebhook": notify_webhook,
+            "notifyEmail": notify_email,
+        },
     )
     _raise_on_create_error(await client.request("GET", client.crawler_url, params=params))
 

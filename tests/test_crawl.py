@@ -275,3 +275,95 @@ async def test_async_crawl_raises_when_create_returns_200_with_error_code():
     with pytest.raises(APIError, match="name is over 30 chars"):
         async for _ in db.crawl("https://example.com", job_name="x" * 31):
             pass
+
+"""
+Named create options and multi-value custom_headers (S2)
+"""
+
+
+def _capture_create():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"jobs": [{"name": "j"}]})
+
+    return seen, handler
+
+
+NAMED = dict(
+    url_crawl_regex="^https://a/", url_process_regex="/p/", page_process_pattern="<article",
+    max_to_crawl_per_subdomain=5, max_to_process_per_subdomain=3, use_canonical=False,
+    notify_webhook="https://hook", notify_email="a@b.example",
+)
+
+
+def test_crawl_named_options_are_query_params_on_get():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j", **NAMED))
+    (req,) = seen
+    assert req.method == "GET"
+    p = req.url.params
+    assert p["urlCrawlRegEx"] == "^https://a/"
+    assert p["urlProcessRegEx"] == "/p/"
+    assert p["pageProcessPattern"] == "<article"
+    assert p["maxToCrawlPerSubdomain"] == "5"
+    assert p["maxToProcessPerSubdomain"] == "3"
+    assert p["useCanonical"] == "0"
+    assert p["notifyWebhook"] == "https://hook"
+    assert p["notifyEmail"] == "a@b.example"
+
+
+def test_crawl_named_options_absent_by_default():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j"))
+    keys = set(seen[0].url.params.keys())
+    assert keys.isdisjoint({
+        "urlCrawlRegEx", "urlProcessRegEx", "pageProcessPattern", "maxToCrawlPerSubdomain",
+        "maxToProcessPerSubdomain", "useCanonical", "notifyWebhook", "notifyEmail", "customHeaders",
+    })
+
+
+def test_crawl_use_canonical_true_sends_1():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j", use_canonical=True))
+    assert seen[0].url.params["useCanonical"] == "1"
+
+
+def test_crawl_custom_headers_single_and_multi():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j", custom_headers="X-A: 1"))
+    assert seen[0].url.params.get_list("customHeaders") == ["X-A: 1"]
+    seen.clear()
+    next(db.crawl("https://example.com", job_name="j", custom_headers=["X-A: 1", "X-B: 2"]))
+    assert seen[0].url.params.get_list("customHeaders") == ["X-A: 1", "X-B: 2"]
+    seen.clear()
+    next(db.crawl("https://example.com", job_name="j", custom_headers=[]))
+    assert "customHeaders" not in seen[0].url.params
+
+
+@pytest.mark.anyio
+async def test_async_crawl_named_options_and_multi_headers():
+    seen, handler = _capture_create()
+    db = DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler))
+    async for _ in db.crawl("https://example.com", job_name="j", custom_headers=("X-A: 1", "X-B: 2"), **NAMED):
+        break
+    p = seen[0].url.params
+    assert p.get_list("customHeaders") == ["X-A: 1", "X-B: 2"]
+    assert p["urlCrawlRegEx"] == "^https://a/"
+    assert p["useCanonical"] == "0"
+    assert p["maxToProcessPerSubdomain"] == "3"
+    assert p["notifyEmail"] == "a@b.example"
+
+
+@pytest.mark.anyio
+async def test_async_crawl_custom_headers_single_string():
+    seen, handler = _capture_create()
+    db = DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler))
+    async for _ in db.crawl("https://example.com", job_name="j", custom_headers="X-A: 1"):
+        break
+    assert seen[0].url.params.get_list("customHeaders") == ["X-A: 1"]
