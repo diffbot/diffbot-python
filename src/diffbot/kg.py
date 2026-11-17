@@ -7,8 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Mapping, Optional, Sequence
 
 from ._constants import KG_BASE
+from .errors import ValidationError
 from .ontology import Ontology
-from .types import DqlEntity, ExportFormat
+from .types import DqlCluster, DqlEntity, DqlJsonMode, DqlType, ExportFormat
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -25,6 +26,7 @@ def _build_dql_body(
     filter: Optional[str],
     exportspec: Optional[str],
     extra: Optional[Mapping[str, Any]],
+    named: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """JSON body for ``POST /kg/v3/dql`` (``DqlPostRequest``). The token is *not* part
     of the body; it travels in the query string, as the spec's security scheme says."""
@@ -37,9 +39,44 @@ def _build_dql_body(
         body["filter"] = filter
     if exportspec is not None:
         body["exportspec"] = exportspec
+    if named:
+        # ``named`` maps wire names to values; ``None`` means "not set".
+        set_named = {k: v for k, v in named.items() if v is not None}
+        if extra:
+            dupes = sorted(set(set_named) & set(extra))
+            if dupes:
+                raise ValidationError(
+                    f"{', '.join(dupes)} given both as a named option and in extra; pass it once"
+                )
+        body.update(set_named)
     if extra:
         body.update(extra)
     return body
+
+
+def _named_dql_options(
+    type: Optional[DqlType],
+    col: Optional[str],
+    filter_exclude: Optional[str],
+    exportseparator: Optional[str],
+    exportfile: Optional[str],
+    jsonmode: Optional[DqlJsonMode],
+    non_canonical_facts: Optional[bool],
+    no_dedup_articles: Optional[bool],
+    cluster: Optional[DqlCluster],
+) -> Dict[str, Any]:
+    """Python names -> wire names for the named DQL options."""
+    return {
+        "type": type,
+        "col": col,
+        "filterExclude": filter_exclude,
+        "exportseparator": exportseparator,
+        "exportfile": exportfile,
+        "jsonmode": jsonmode,
+        "nonCanonicalFacts": non_canonical_facts,
+        "noDedupArticles": no_dedup_articles,
+        "cluster": cluster,
+    }
 
 
 def _decode_dql(response: Any, format: ExportFormat, raw: bool) -> Any:
@@ -79,8 +116,21 @@ def dql(
     exportspec: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
+    type: Optional[DqlType] = None,
+    col: Optional[str] = None,
+    filter_exclude: Optional[str] = None,
+    exportseparator: Optional[str] = None,
+    exportfile: Optional[str] = None,
+    jsonmode: Optional[DqlJsonMode] = None,
+    non_canonical_facts: Optional[bool] = None,
+    no_dedup_articles: Optional[bool] = None,
+    cluster: Optional[DqlCluster] = None,
 ) -> Any:
-    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
+    named = _named_dql_options(
+        type, col, filter_exclude, exportseparator, exportfile, jsonmode,
+        non_canonical_facts, no_dedup_articles, cluster,
+    )
+    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra, named)
     response = client.request("POST", client.dql_url, params={"token": client.token}, json=body)
     return _decode_dql(response, format, raw)
 
@@ -96,8 +146,21 @@ async def dql_async(
     exportspec: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
     raw: bool = False,
+    type: Optional[DqlType] = None,
+    col: Optional[str] = None,
+    filter_exclude: Optional[str] = None,
+    exportseparator: Optional[str] = None,
+    exportfile: Optional[str] = None,
+    jsonmode: Optional[DqlJsonMode] = None,
+    non_canonical_facts: Optional[bool] = None,
+    no_dedup_articles: Optional[bool] = None,
+    cluster: Optional[DqlCluster] = None,
 ) -> Any:
-    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra)
+    named = _named_dql_options(
+        type, col, filter_exclude, exportseparator, exportfile, jsonmode,
+        non_canonical_facts, no_dedup_articles, cluster,
+    )
+    body = _build_dql_body(query, size, from_, format, filter, exportspec, extra, named)
     response = await client.request("POST", client.dql_url, params={"token": client.token}, json=body)
     if not raw and format == "jsonl":
         return _aiter_jsonl(response.text)

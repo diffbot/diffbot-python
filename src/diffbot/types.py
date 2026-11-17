@@ -35,6 +35,33 @@ class ResponseFormat(TypedDict, total=False):
 #: DQL / Enhance-bulk export formats.
 ExportFormat = Literal["json", "jsonl", "csv", "xls", "xlsx"]
 
+#: DQL ``type``: ``crawl`` searches your crawl collections (see ``col``).
+DqlType = Literal["query", "text", "queryTextFallback", "crawl"]
+
+#: DQL ``jsonmode``: ``extended`` adds origin info for facts, ``id`` returns only ids and origins.
+DqlJsonMode = Literal["extended", "id"]
+
+#: DQL ``cluster`` (Article queries only).
+DqlCluster = Literal["all", "best", "dedupe"]
+
+
+class DqlOptions(TypedDict, total=False):
+    """Named DQL options sent in the POST JSON body (keyword-only on ``dql()``).
+
+    ``report`` and ``view`` are deliberately not named; pass them through ``extra``.
+    """
+
+    type: DqlType
+    col: str
+    filter_exclude: str
+    exportseparator: str
+    exportfile: str
+    jsonmode: DqlJsonMode
+    non_canonical_facts: bool
+    no_dedup_articles: bool
+    cluster: DqlCluster
+
+
 #: How much of each page's matching content `web_search` returns.
 SnippetLength = Literal["short", "medium", "long", "full"]
 

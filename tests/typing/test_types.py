@@ -112,3 +112,11 @@ def test_known_keys_type_check_and_cast_escape_hatch():
     # undeclared keys: cast is the documented escape hatch
     loose = cast(Dict[str, Any], db.dql("q"))
     assert loose["hits"] == 1
+
+
+def _dql_named_option_types() -> None:
+    assert_type(db.dql("q", type="crawl", col="all", cluster="best", jsonmode="id"), DqlResponse)
+    assert_type(db.dql("q", format="csv", exportseparator="|", exportfile="x.csv"), str)
+    assert_type(db.dql("q", non_canonical_facts=True, no_dedup_articles=True, filter_exclude="a"), DqlResponse)
+    db.dql("q", type="bogus")  # type: ignore[call-overload]
+    db.dql("q", cluster="nope")  # type: ignore[call-overload]

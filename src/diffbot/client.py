@@ -27,6 +27,10 @@ from .types import (
     CrawlJob,
     CustomExtractOptions,
     DiscussionExtractOptions,
+    DqlCluster,
+    DqlJsonMode,
+    DqlOptions,
+    DqlType,
     DiscussionExtractResponse,
     DqlEntity,
     DqlResponse,
@@ -339,27 +343,27 @@ class Diffbot:
 
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True],
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True], **options: "Unpack[DqlOptions]"
     ) -> bytes: ...
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> str: ...
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> bytes: ...
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> Iterator[DqlEntity]: ...
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> DqlResponse: ...
     @overload
     def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ..., **options: "Unpack[DqlOptions]"
     ) -> Union[DqlResponse, str, bytes, Iterator[DqlEntity]]: ...
     def dql(
         self,
@@ -372,6 +376,15 @@ class Diffbot:
         exportspec: Optional[str] = None,
         extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
+        type: Optional[DqlType] = None,
+        col: Optional[str] = None,
+        filter_exclude: Optional[str] = None,
+        exportseparator: Optional[str] = None,
+        exportfile: Optional[str] = None,
+        jsonmode: Optional[DqlJsonMode] = None,
+        non_canonical_facts: Optional[bool] = None,
+        no_dedup_articles: Optional[bool] = None,
+        cluster: Optional[DqlCluster] = None,
     ) -> Any:
         """Run a DQL query against the Diffbot Knowledge Graph (sent as ``POST`` with a JSON body).
 
@@ -379,8 +392,19 @@ class Diffbot:
         (default); ``str`` for ``"csv"``; ``bytes`` for ``"xls"``/``"xlsx"`` or any
         format with ``raw=True`` (the undecoded response); an iterator of
         ``DqlEntity`` for ``"jsonl"``.
+
+        Named options (all optional, sent in the POST body): ``type``
+        (``"query"``/``"text"``/``"queryTextFallback"``/``"crawl"``; ``"crawl"`` searches
+        crawl collections, selected with ``col``), ``filter_exclude``, ``exportseparator``,
+        ``exportfile``, ``jsonmode``, ``non_canonical_facts``, ``no_dedup_articles`` and
+        ``cluster``. A key given both as a named option and in ``extra`` raises
+        ``ValidationError``. ``report`` and ``view`` are not named; use ``extra``.
         """
-        return _dql(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw)
+        return _dql(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw,
+            type=type, col=col, filter_exclude=filter_exclude, exportseparator=exportseparator,
+            exportfile=exportfile, jsonmode=jsonmode, non_canonical_facts=non_canonical_facts,
+            no_dedup_articles=no_dedup_articles, cluster=cluster,
+        )
 
     def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Any]:
         """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args;
@@ -662,27 +686,27 @@ class DiffbotAsync:
 
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True],
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[True], **options: "Unpack[DqlOptions]"
     ) -> bytes: ...
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["csv"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> str: ...
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["xls", "xlsx"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> bytes: ...
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["jsonl"], filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> AsyncIterator[DqlEntity]: ...
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: Literal["json"] = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: Literal[False] = ..., **options: "Unpack[DqlOptions]"
     ) -> DqlResponse: ...
     @overload
     async def dql(
-        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ...
+        self, query: str, *, size: int = ..., from_: int = ..., format: ExportFormat = ..., filter: Optional[str] = ..., exportspec: Optional[str] = ..., extra: Optional[Mapping[str, Any]] = ..., raw: bool = ..., **options: "Unpack[DqlOptions]"
     ) -> Union[DqlResponse, str, bytes, AsyncIterator[DqlEntity]]: ...
     async def dql(
         self,
@@ -695,6 +719,15 @@ class DiffbotAsync:
         exportspec: Optional[str] = None,
         extra: Optional[Mapping[str, Any]] = None,
         raw: bool = False,
+        type: Optional[DqlType] = None,
+        col: Optional[str] = None,
+        filter_exclude: Optional[str] = None,
+        exportseparator: Optional[str] = None,
+        exportfile: Optional[str] = None,
+        jsonmode: Optional[DqlJsonMode] = None,
+        non_canonical_facts: Optional[bool] = None,
+        no_dedup_articles: Optional[bool] = None,
+        cluster: Optional[DqlCluster] = None,
     ) -> Any:
         """Run a DQL query against the Diffbot Knowledge Graph (sent as ``POST`` with a JSON body).
 
@@ -702,8 +735,19 @@ class DiffbotAsync:
         (default); ``str`` for ``"csv"``; ``bytes`` for ``"xls"``/``"xlsx"`` or any
         format with ``raw=True`` (the undecoded response); an iterator of
         ``DqlEntity`` for ``"jsonl"``.
+
+        Named options (all optional, sent in the POST body): ``type``
+        (``"query"``/``"text"``/``"queryTextFallback"``/``"crawl"``; ``"crawl"`` searches
+        crawl collections, selected with ``col``), ``filter_exclude``, ``exportseparator``,
+        ``exportfile``, ``jsonmode``, ``non_canonical_facts``, ``no_dedup_articles`` and
+        ``cluster``. A key given both as a named option and in ``extra`` raises
+        ``ValidationError``. ``report`` and ``view`` are not named; use ``extra``.
         """
-        return await _dql_async(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw)
+        return await _dql_async(self, query, size=size, from_=from_, format=format, filter=filter, exportspec=exportspec, extra=extra, raw=raw,
+            type=type, col=col, filter_exclude=filter_exclude, exportseparator=exportseparator,
+            exportfile=exportfile, jsonmode=jsonmode, non_canonical_facts=non_canonical_facts,
+            no_dedup_articles=no_dedup_articles, cluster=cluster,
+        )
 
     async def dql_parallel(self, queries: Sequence[Dict[str, Any]], *, workers: int = 8) -> List[Any]:
         """Run multiple DQL queries concurrently. Each item is a dict of dql() keyword args;
