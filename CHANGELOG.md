@@ -1,11 +1,48 @@
 # Changelog
 
-## Unreleased
+## 3.2.0 (unreleased)
 
-Phase 0 of the Diffbot SDKs' full HTTP API coverage plan: shared transport
-foundation and a sync/async de-duplication refactor. No new API endpoints
-land in this phase, and the package version is unchanged (per the plan's
-scope, version bumps are deferred).
+Shared transport foundation, a sync/async de-duplication refactor, and DQL sent
+as a POST. The package version in `pyproject.toml` is bumped at release time.
+
+### Changed
+
+- **DQL is now sent as `POST` with a JSON body.** `dql()`, `dql_parallel()` and
+  their async twins keep the same names, options, defaults and return values;
+  only the wire format changes: `POST {dql_url}?token=…` with
+  `{"query", "size", "from"?, "format"?, "filter"?, "exportspec"?, …extra}`.
+  The token stays in the query string; the query text no longer appears in the
+  URL, and the URL-length limit on long queries is gone. `extra` is now typed
+  `Mapping[str, Any]` (values go into the JSON body verbatim).
+- `crawl()` failure now raises `JobError` (carrying the job name) instead of a
+  synthesized `APIError(500, ...)`. `JobError` subclasses `APIError`.
+
+#### Migration note: mocks and proxies
+
+Test mocks keyed on `GET` and `?query=` stop matching. Before/after:
+
+```python
+# before (3.1.x)
+def handler(request: httpx.Request) -> httpx.Response:
+    assert request.method == "GET"
+    assert request.url.params["query"] == "type:Organization"
+    return httpx.Response(200, json={"data": []})
+
+# after (3.2.0)
+def handler(request: httpx.Request) -> httpx.Response:
+    assert request.method == "POST"
+    assert json.loads(request.content)["query"] == "type:Organization"
+    return httpx.Response(200, json={"data": []})
+```
+
+GET-only proxies, caches, or a custom `dql_url` mirror may reject or not cache
+POSTs. If you need the old wire format, use the low-level call (no new API):
+
+```python
+db.request("GET", db.dql_url, params={"token": db.token, "query": q, "size": 10})
+```
+
+or pin `diffbot<3.2`.
 
 ### Added
 
