@@ -143,7 +143,19 @@ from diffbot import Diffbot
 
 db = Diffbot(token="YOUR_TOKEN")
 data = db.extract("https://www.example.com")
+
+# Optional keyword-only options (per-API field names are type-checked):
+article = db.extract(
+    "https://www.example.com/post",
+    "article",
+    fmt="json",
+    timeout=60000,  # server-side fetch timeout in ms (default 30000)
+    fields=["links", "quotes"],
+    max_tags=5,
+)
 ```
+
+`timeout` is the Diffbot-side fetch timeout in milliseconds; the SDK raises the HTTP transport timeout to at least `timeout + 10s` so the client never aborts first. `mode` overrides the `fmt="markdown"` → `mode=llm` mapping, and `extra={"proxy": ..., "proxyAuth": ...}` passes anything not named.
 
 ### Ask Diffbot LLM
 ```python
@@ -199,12 +211,47 @@ for event in db.crawl("https://www.example.com", hops=1):
     print(event)
 ```
 
+For tools that can't block on a long crawl, start the job without watching, poll it, then download the results:
+
+```python
+import time
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+    pass  # watch=False (the default): only creates the job
+
+while db.crawl_get_job("my-crawl").get("jobStatus", {}).get("status", 0) in (0, 7):
+    time.sleep(5)  # 0 initializing, 7 in progress; 9 complete
+
+records = db.crawl_download("my-crawl")  # list of extracted records
+csv_text = db.crawl_download("my-crawl", format="csv")  # str
+```
+
+`crawl_get_job` returns `{}` for a job that doesn't exist (the TypeScript SDK returns `undefined`).
+
 ### Query the Knowledge Graph
 ```python
 from diffbot import Diffbot
 
 db = Diffbot(token="YOUR_TOKEN")
 results = db.dql('type:Organization name:"Diffbot"')
+
+# The return type follows `format`: DqlResponse (json), str (csv), bytes (xls/xlsx
+# or raw=True), or an iterator of entities (jsonl).
+csv_text = db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+for entity in db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl"):
+    print(entity["entity"]["name"])
+```
+
+### Account and token check
+```python
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+if not db.verify_token():  # True/False; only an auth failure means False
+    raise SystemExit("Diffbot token rejected")
+usage = db.account(days=7).get("usage", [])  # free call; never print the whole response
 ```
 
 ### Web Search
@@ -247,6 +294,10 @@ async def main():
     async with DiffbotAsync(token="YOUR_TOKEN") as db:
         data = await db.extract("https://www.example.com")
         print(data)
+
+        article = await db.extract(
+            "https://www.example.com/post", "article", fmt="json", timeout=60000, fields=["links"]
+        )
 
 asyncio.run(main())
 ```
@@ -301,6 +352,24 @@ async def main():
 asyncio.run(main())
 ```
 
+Start, poll, then download, without blocking inside one call:
+
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        async for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+            pass  # watch=False (the default): only creates the job
+        while (await db.crawl_get_job("my-crawl")).get("jobStatus", {}).get("status", 0) in (0, 7):
+            await asyncio.sleep(5)
+        records = await db.crawl_download("my-crawl")
+        csv_text = await db.crawl_download("my-crawl", format="csv")
+
+asyncio.run(main())
+```
+
 ### Query the Knowledge Graph
 ```python
 import asyncio
@@ -310,6 +379,24 @@ async def main():
     async with DiffbotAsync(token="YOUR_TOKEN") as db:
         results = await db.dql('type:Organization name:"Diffbot"')
         print(results)
+
+        csv_text = await db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+        async for entity in await db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl"):
+            print(entity["entity"]["name"])
+
+asyncio.run(main())
+```
+
+### Account and token check
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        if not await db.verify_token():
+            raise SystemExit("Diffbot token rejected")
+        usage = (await db.account(days=7)).get("usage", [])
 
 asyncio.run(main())
 ```

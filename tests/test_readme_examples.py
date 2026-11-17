@@ -306,3 +306,126 @@ def test_readme_authentication_resolve_token(monkeypatch, tmp_path):
     db = Diffbot(token=resolve_token(), transport=httpx.MockTransport(handler))
     data = db.extract("https://www.example.com")
     assert "objects" in data
+
+
+# ---------------------------------------------------------------------------
+# Extract options, DQL formats, crawl start/poll/download, account
+# ---------------------------------------------------------------------------
+
+def test_readme_sync_extract_options():
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        assert request.url.path == "/v3/article"
+        assert params["timeout"] == "60000"
+        assert params["fields"] == "links,quotes"
+        assert params["maxTags"] == "5"
+        assert "mode" not in params  # fmt="json" -> no llm mapping
+        assert request.extensions["timeout"]["read"] == 70
+        return httpx.Response(200, json={"objects": [{"title": "Post"}]})
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    article = db.extract(
+        "https://www.example.com/post",
+        "article",
+        fmt="json",
+        timeout=60000,
+        fields=["links", "quotes"],
+        max_tags=5,
+    )
+    assert article["objects"][0]["title"] == "Post"
+
+
+def test_readme_sync_dql_formats():
+    def handler(request: httpx.Request) -> httpx.Response:
+        fmt = json.loads(request.content)["format"]
+        if fmt == "csv":
+            return httpx.Response(200, text="name\nDiffbot\n")
+        return httpx.Response(200, text='{"entity": {"name": "Diffbot"}}\n')
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    csv_text = db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+    assert csv_text == "name\nDiffbot\n"
+    names = [e["entity"]["name"] for e in db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl")]
+    assert names == ["Diffbot"]
+
+
+def _crawl_flow_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/v3/crawl/data":
+        if request.url.params.get("format") == "csv":
+            return httpx.Response(200, text="Url\nhttps://www.example.com\n")
+        return httpx.Response(200, json=[{"pageUrl": "https://www.example.com"}])
+    if "seeds" in request.url.params:
+        return httpx.Response(200, json={"jobs": [{"name": "my-crawl"}]})
+    return httpx.Response(200, json={"jobs": [{"name": "my-crawl", "jobStatus": {"status": 9}}]})
+
+
+def test_readme_sync_crawl_start_poll_download():
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(_crawl_flow_handler))
+    for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+        pass
+    while db.crawl_get_job("my-crawl").get("jobStatus", {}).get("status", 0) in (0, 7):
+        raise AssertionError("job should already be complete")
+    records = db.crawl_download("my-crawl")
+    csv_text = db.crawl_download("my-crawl", format="csv")
+    assert records == [{"pageUrl": "https://www.example.com"}]
+    assert csv_text.startswith("Url")
+    assert db.crawl_get_job.__doc__ and "{}" in db.crawl_get_job.__doc__
+
+
+def test_readme_sync_account_and_verify_token():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v4/account"
+        return httpx.Response(200, json={"usage": [{"date": "2026-11-16", "credits": 1}]})
+
+    db = Diffbot(token="test-token", transport=httpx.MockTransport(handler))
+    assert db.verify_token()
+    usage = db.account(days=7).get("usage", [])
+    assert usage[0]["credits"] == 1
+
+
+@pytest.mark.anyio
+async def test_readme_async_extract_options():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["fields"] == "links"
+        return httpx.Response(200, json={"objects": []})
+
+    async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler)) as db:
+        await db.extract("https://www.example.com", "article", fmt="json", timeout=60000, fields=["links"])
+
+
+@pytest.mark.anyio
+async def test_readme_async_dql_formats():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if json.loads(request.content)["format"] == "csv":
+            return httpx.Response(200, text="name\nDiffbot\n")
+        return httpx.Response(200, text='{"entity": {"name": "Diffbot"}}\n')
+
+    async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler)) as db:
+        csv_text = await db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+        names = [e["entity"]["name"] async for e in await db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl")]
+    assert csv_text == "name\nDiffbot\n"
+    assert names == ["Diffbot"]
+
+
+@pytest.mark.anyio
+async def test_readme_async_crawl_start_poll_download():
+    async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(_crawl_flow_handler)) as db:
+        async for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+            pass
+        while (await db.crawl_get_job("my-crawl")).get("jobStatus", {}).get("status", 0) in (0, 7):
+            raise AssertionError("job should already be complete")
+        records = await db.crawl_download("my-crawl")
+        csv_text = await db.crawl_download("my-crawl", format="csv")
+    assert records == [{"pageUrl": "https://www.example.com"}]
+    assert csv_text.startswith("Url")
+
+
+@pytest.mark.anyio
+async def test_readme_async_account_and_verify_token():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"usage": []})
+
+    async with DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler)) as db:
+        assert await db.verify_token()
+        usage = (await db.account(days=7)).get("usage", [])
+    assert usage == []
