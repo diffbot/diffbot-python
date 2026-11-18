@@ -236,3 +236,23 @@ async def test_async_crawl_watch_uses_download_for_urls():
 def test_crawl_get_job_missing_is_empty_dict():
     db = make_client(lambda r: httpx.Response(200, json={"jobs": []}))
     assert db.crawl_get_job("nope") == {}
+
+
+def test_crawl_raises_when_create_returns_200_with_error_code():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"errorCode": 505, "error": "name is over 30 chars"})
+
+    db = make_client(handler)
+    with pytest.raises(APIError, match="name is over 30 chars"):
+        next(db.crawl("https://example.com", job_name="x" * 31))
+
+
+@pytest.mark.anyio
+async def test_async_crawl_raises_when_create_returns_200_with_error_code():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"errorCode": 505, "error": "name is over 30 chars"})
+
+    db = DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler))
+    with pytest.raises(APIError, match="name is over 30 chars"):
+        async for _ in db.crawl("https://example.com", job_name="x" * 31):
+            pass

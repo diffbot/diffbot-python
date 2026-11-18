@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
 
-from .errors import JobError
+from .errors import APIError, JobError
 from .types import CrawlDownloadFormat, CrawlJob
 
 if TYPE_CHECKING:
@@ -64,7 +64,7 @@ def crawl(
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
     )
-    client.request("GET", client.crawler_url, params=params)
+    _raise_on_create_error(client.request("GET", client.crawler_url, params=params))
 
     yield CrawlEvent(
         event_type=CrawlEventType.JOB_CREATED,
@@ -101,6 +101,17 @@ def crawl(
             break
 
         time.sleep(poll_interval)
+
+
+def _raise_on_create_error(response: Any) -> None:
+    """The crawler reports some create failures (e.g. a job name over 30 chars) as HTTP 200
+    with ``errorCode``/``error`` in the body; surface them instead of returning JOB_CREATED."""
+    try:
+        data = response.json()
+    except ValueError:
+        return
+    if isinstance(data, dict) and data.get("errorCode"):
+        raise APIError(200, json.dumps({"message": data.get("error") or f"errorCode {data['errorCode']}"}))
 
 
 def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int,
@@ -177,7 +188,7 @@ async def crawl_async(
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
     )
-    await client.request("GET", client.crawler_url, params=params)
+    _raise_on_create_error(await client.request("GET", client.crawler_url, params=params))
 
     yield CrawlEvent(
         event_type=CrawlEventType.JOB_CREATED,
