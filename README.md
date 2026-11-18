@@ -525,6 +525,27 @@ environment variable or `~/.diffbot/credentials`:
 DIFFBOT_API_TOKEN=your_token python -m pytest -m live
 ```
 
+## Releasing
+
+Releases are published by CI; nothing is uploaded from a laptop.
+
+1. Bump the version in `pyproject.toml` (`make bump-patch`, `bump-minor`, or `bump-major`), update `CHANGELOG.md`, and merge to `main`.
+2. Tag the merge commit and push the tag:
+   ```bash
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   ```
+
+The tag must match the `pyproject.toml` version. Pushing it runs two workflows:
+[`publish-pypi.yml`](.github/workflows/publish-pypi.yml) checks the version, runs the
+unit tests and pyright, builds the sdist and wheel, and publishes them to PyPI via
+[trusted publishing](https://docs.pypi.org/trusted-publishers/) (no API token), and
+[`release.yml`](.github/workflows/release.yml) builds the standalone `db` binaries
+and attaches them to a GitHub Release. Running `publish-pypi.yml` manually
+(workflow_dispatch) is a dry run: it builds and checks but never uploads.
+
+`make release` (token from macOS Keychain) remains only as a manual fallback for
+when the workflow can't be used.
+
 ## Acknowledgements
 
 Thanks to [@attilaolah](https://github.com/attilaolah), who published the original `diffbot` package in 2012 and looked after the name for 14 years.

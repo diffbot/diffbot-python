@@ -61,10 +61,16 @@ _release-test:
 	  fi && \
 	  UV_PUBLISH_TOKEN="$$TOKEN" uv publish --publish-url https://test.pypi.org/legacy/
 
-# Publish to real PyPI. Confirmation gate before upload (PyPI does not allow re-uploads).
+# MANUAL FALLBACK ONLY. The normal release path is CI: merge to main, then push
+# a tag vX.Y.Z matching pyproject.toml; .github/workflows/publish-pypi.yml
+# publishes to PyPI via trusted publishing (no token). Use this target only if
+# that workflow is unavailable. It uploads with a token from macOS Keychain
+# (service: pypi-token-pypi) after a confirmation gate (PyPI does not allow
+# re-uploads).
 release: build _release
 
 _release:
+	@echo "NOTE: 'make release' is the manual fallback; normally push tag vX.Y.Z and let publish-pypi.yml publish."
 	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/$(PKG)/$$VERSION/json") && \
 	  if [ "$$STATUS" = "200" ]; then \

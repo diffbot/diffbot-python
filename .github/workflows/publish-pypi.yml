@@ -1,0 +1,126 @@
+name: Publish to PyPI
+
+# Publishes the `diffbot` sdist + wheel to PyPI via trusted publishing (OIDC):
+# no API tokens are stored anywhere. Triggered by pushing a version tag
+# (e.g. v3.4.0). workflow_dispatch runs verify + build + twine check only,
+# as a dry run; it never uploads.
+#
+# One-time setup (maintainer): on pypi.org > diffbot > Manage > Publishing, add
+# a GitHub publisher with owner `diffbot`, repository `diffbot-python`,
+# workflow `publish-pypi.yml`, environment `pypi`; and create a GitHub
+# environment named `pypi` in the repo settings (protection rules optional).
+#
+# The standalone `db` binaries are published separately by release.yml, which
+# fires on the same tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight run: a cancelled publish could leave PyPI with only
+# some of the files for a version, and PyPI doesn't allow re-uploading them.
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify version, tests, and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen --extra dev
+
+      # __version__ is read from the installed distribution metadata, so this
+      # checks that pyproject.toml's version is what the package reports.
+      - name: Check tag matches package version
+        run: |
+          set -euo pipefail
+          pkg=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          runtime=$(uv run --frozen python -c 'import diffbot; print(diffbot.__version__)')
+          if [ "$pkg" != "$runtime" ]; then
+            echo "::error::pyproject.toml version ${pkg} does not match diffbot.__version__ ${runtime}."
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag=${GITHUB_REF_NAME#v}
+            if [ "$pkg" != "$tag" ]; then
+              echo "::error::Tag v${tag} does not match pyproject.toml version ${pkg}. Bump pyproject.toml (e.g. 'make bump-patch') and re-tag."
+              exit 1
+            fi
+          fi
+          echo "Package version: ${pkg}"
+
+      # Unit tests only: pyproject's addopts deselect `-m live` by default.
+      - name: Run tests
+        run: uv run --frozen pytest
+
+      - name: Run pyright
+        run: uv run --frozen pyright
+
+  build:
+    name: Build sdist and wheel
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: uv build --sdist --wheel --out-dir dist
+
+      - name: Check distributions
+        run: uvx twine check --strict dist/*
+
+      - name: Check built version matches pyproject.toml
+        run: |
+          set -euo pipefail
+          pkg=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          ls dist
+          test -f "dist/diffbot-${pkg}.tar.gz"
+          test -f "dist/diffbot-${pkg}-py3-none-any.whl"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    # Tag pushes only; workflow_dispatch stops after build.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/diffbot/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
