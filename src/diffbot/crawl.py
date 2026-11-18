@@ -79,16 +79,10 @@ def crawl(
         client, job_name, site, max_to_crawl, max_to_process, hops, restrict_domain,
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
-        {
-            "urlCrawlRegEx": url_crawl_regex,
-            "urlProcessRegEx": url_process_regex,
-            "pageProcessPattern": page_process_pattern,
-            "maxToCrawlPerSubdomain": max_to_crawl_per_subdomain,
-            "maxToProcessPerSubdomain": max_to_process_per_subdomain,
-            "useCanonical": None if use_canonical is None else int(use_canonical),
-            "notifyWebhook": notify_webhook,
-            "notifyEmail": notify_email,
-        },
+        _named_create_options(
+            url_crawl_regex, url_process_regex, page_process_pattern, max_to_crawl_per_subdomain,
+            max_to_process_per_subdomain, use_canonical, notify_webhook, notify_email,
+        ),
     )
     _raise_on_create_error(client.request("GET", client.crawler_url, params=params))
 
@@ -140,6 +134,29 @@ def _raise_on_create_error(response: Any) -> None:
         return
     if isinstance(data, dict) and data.get("errorCode"):
         raise APIError(response.status_code, response.text, headers=dict(response.headers))
+
+
+def _named_create_options(
+    url_crawl_regex: Optional[str],
+    url_process_regex: Optional[str],
+    page_process_pattern: Optional[str],
+    max_to_crawl_per_subdomain: Optional[int],
+    max_to_process_per_subdomain: Optional[int],
+    use_canonical: Optional[bool],
+    notify_webhook: Optional[str],
+    notify_email: Optional[str],
+) -> Dict[str, Any]:
+    """Python names -> wire names for the S2 create options; ``None`` means "not set"."""
+    return {
+        "urlCrawlRegEx": url_crawl_regex,
+        "urlProcessRegEx": url_process_regex,
+        "pageProcessPattern": page_process_pattern,
+        "maxToCrawlPerSubdomain": max_to_crawl_per_subdomain,
+        "maxToProcessPerSubdomain": max_to_process_per_subdomain,
+        "useCanonical": None if use_canonical is None else int(use_canonical),
+        "notifyWebhook": notify_webhook,
+        "notifyEmail": notify_email,
+    }
 
 
 def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int,
@@ -228,16 +245,10 @@ async def crawl_async(
         client, job_name, site, max_to_crawl, max_to_process, hops, restrict_domain,
         api_url, crawl_delay, url_crawl_pattern, url_process_pattern,
         obey_robots, use_proxies, custom_headers,
-        {
-            "urlCrawlRegEx": url_crawl_regex,
-            "urlProcessRegEx": url_process_regex,
-            "pageProcessPattern": page_process_pattern,
-            "maxToCrawlPerSubdomain": max_to_crawl_per_subdomain,
-            "maxToProcessPerSubdomain": max_to_process_per_subdomain,
-            "useCanonical": None if use_canonical is None else int(use_canonical),
-            "notifyWebhook": notify_webhook,
-            "notifyEmail": notify_email,
-        },
+        _named_create_options(
+            url_crawl_regex, url_process_regex, page_process_pattern, max_to_crawl_per_subdomain,
+            max_to_process_per_subdomain, use_canonical, notify_webhook, notify_email,
+        ),
     )
     _raise_on_create_error(await client.request("GET", client.crawler_url, params=params))
 
