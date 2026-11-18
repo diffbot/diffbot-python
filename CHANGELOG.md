@@ -6,7 +6,7 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the projec
 
 ## [3.4.0] - 2026-11-17
 
-First release since 3.1.x. It rolls up three development lines that were never
+First release since 3.1.1 (and includes everything in it). It rolls up three development lines that were never
 published on their own: the shared transport, sync/async de-duplication and DQL over
 POST (planned as 3.2.0), response types plus `account`/`verify_token`/`crawl_download`/
 extract options (3.3.0), and named options on existing endpoints plus `nlp()` (3.4.0).
