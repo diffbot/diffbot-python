@@ -23,10 +23,17 @@ class APIError(DiffbotError):
         self.request_id: Optional[str] = None
         try:
             data = json.loads(body)
-            self.message = data.get("message")
-            self.request_id = data.get("requestId")
-        except (ValueError, AttributeError):
-            pass
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            # Several Diffbot APIs use ``{"errorCode": ..., "error": "..."}`` instead of
+            # ``message``; fall back to it (parity with the TypeScript SDK).
+            message = data.get("message")
+            if not isinstance(message, str):
+                message = data.get("error")
+            self.message = message if isinstance(message, str) else None
+            request_id = data.get("requestId")
+            self.request_id = request_id if isinstance(request_id, str) else None
         display = self.message or (body[:200] + ("..." if len(body) > 200 else ""))
         super().__init__(f"Diffbot API error {status_code}: {display}")
 

@@ -229,3 +229,20 @@ def test_raise_for_status_throws_rate_limit_error_for_429_with_retry_after():
     with pytest.raises(RateLimitError) as exc_info:
         raise_for_status(response)
     assert exc_info.value.retry_after == "7"
+
+
+def test_api_error_message_falls_back_to_error_key():
+    from diffbot.errors import APIError
+
+    err = APIError(400, '{"errorCode": 505, "error": "name is over 30 chars"}')
+    assert err.message == "name is over 30 chars"
+    assert "name is over 30 chars" in str(err)
+
+
+def test_api_error_message_prefers_message_and_ignores_non_dict_bodies():
+    from diffbot.errors import APIError
+
+    assert APIError(400, '{"message": "m", "error": "e", "requestId": "r1"}').message == "m"
+    assert APIError(400, '{"message": "m"}').request_id is None
+    assert APIError(400, '["not", "a", "dict"]').message is None
+    assert APIError(500, "plain text").message is None
