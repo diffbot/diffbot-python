@@ -11,6 +11,11 @@ name: Release
 # One-time setup (maintainer): on pypi.org > diffbot > Manage > Publishing, add
 # a GitHub publisher with owner `diffbot`, repository `diffbot-python`,
 # workflow `release.yml`, and NO environment (leave it blank).
+#
+# Release candidates: set pyproject.toml to a PEP 440 prerelease (e.g. 3.4.0rc0)
+# and push the matching tag (v3.4.0rc0). pip ignores prereleases unless asked
+# (`pip install --pre` or `diffbot==3.4.0rc0`), and the GitHub Release is marked
+# as a prerelease.
 on:
   push:
     tags: ["v*"]
@@ -210,10 +215,17 @@ jobs:
             echo "Release $tag exists; uploading assets (clobbering)."
             gh release upload "$tag" dist/* --repo "$repo" --clobber
           else
-            echo "Creating release $tag."
+            # PEP 440 pre/dev releases (v3.4.0rc0, v3.4.0a1, v3.4.0b2, v3.4.0.dev1)
+            # are marked as GitHub prereleases so they never become "Latest".
+            prerelease=()
+            if [[ "${tag#v}" =~ (a|b|rc|\.dev)[0-9]+$ ]]; then
+              prerelease=(--prerelease)
+            fi
+            echo "Creating release $tag ${prerelease[*]:-}."
             gh release create "$tag" \
               --repo "$repo" \
               --title "$tag" \
               --generate-notes \
+              "${prerelease[@]}" \
               dist/*
           fi
