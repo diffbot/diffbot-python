@@ -46,3 +46,8 @@ S2 (plan §2, §6, §8; Python 3.4.0) landed on `feat/sdk-s2`, stacked on `feat/
 - The TypeScript S2 counterpart was not present when this was written, so field-for-field
   parity (names, validation messages) is unchecked beyond `snippetLength`.
 - Plan §11 open question about DQL POST parity is still open (see `S1_LEFTOVERS.md`).
+
+## Live confirmations
+
+- Q2 confirmed live: repeated `text=` on GET web search is accepted (HTTP 200, results mix both values; 5 values also 200).
+- Q3 confirmed live: GET crawl create works, but job names must be <= 30 chars (longer returns HTTP 200 + errorCode 505 and creates nothing; the SDK now raises APIError for that).
