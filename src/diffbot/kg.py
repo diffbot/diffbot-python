@@ -1,4 +1,4 @@
-"""Diffbot Knowledge Graph APIs: DQL search and entity enhancement."""
+"""Diffbot Knowledge Graph APIs: DQL search and the ontology."""
 
 import asyncio
 import pathlib
