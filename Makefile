@@ -90,7 +90,7 @@ verify-release-test:
 	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  TMP=$$(mktemp -d) && \
 	  uv venv --python 3.12 $$TMP/.venv >/dev/null 2>&1 && \
-	  uv pip install --quiet --python $$TMP/.venv/bin/python \
+	  uv pip install --quiet --refresh-package $(PKG) --python $$TMP/.venv/bin/python \
 	    --index-url https://test.pypi.org/simple/ \
 	    --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match \
 	    "$(PKG)==$$VERSION" && \
@@ -101,6 +101,6 @@ verify-release:
 	@VERSION=$$(grep '^version' $(PYPROJECT) | head -1 | cut -d'"' -f2) && \
 	  TMP=$$(mktemp -d) && \
 	  uv venv --python 3.12 $$TMP/.venv >/dev/null 2>&1 && \
-	  uv pip install --quiet --python $$TMP/.venv/bin/python "$(PKG)==$$VERSION" && \
+	  uv pip install --quiet --refresh-package $(PKG) --python $$TMP/.venv/bin/python "$(PKG)==$$VERSION" && \
 	  (cd $$TMP && $$TMP/.venv/bin/python -c "import diffbot; print('PyPI install OK:', diffbot.__version__)") && \
 	  rm -rf $$TMP

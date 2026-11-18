@@ -1,3 +1,5 @@
+import pathlib
+
 import click
 
 from diffbot import Diffbot, resolve_token
@@ -19,3 +21,10 @@ def get_client() -> Diffbot:
         )
         raise click.Abort()
     return Diffbot(token=token)
+
+
+def write_output(path: str, text: str) -> None:
+    """Write text to path, creating missing parent folders."""
+    dest = pathlib.Path(path).expanduser()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text)

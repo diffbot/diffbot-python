@@ -23,7 +23,7 @@ from diffbot import (
     json_schema_format,
 )
 
-from ._common import get_client
+from ._common import get_client, write_output
 
 console = Console()
 is_interactive = sys.stdout.isatty()
@@ -76,8 +76,7 @@ def extract(url, output, fmt, api):
                 output_str = f"Title: {title}\n\nURL: {url}\n\nContent: {content}"
 
         if output:
-            with open(output, "w") as f:
-                f.write(output_str)
+            write_output(output, output_str)
             click.echo(f"Output written to {output}")
         else:
             print_markdown(output_str)
@@ -170,8 +169,7 @@ def ask(prompt: str, output: Optional[str] = None, as_json: bool = False, schema
                 else:
                     for chunk in db.ask(messages):
                         response += chunk
-                with open(output, "w") as f:
-                    f.write(response)
+                write_output(output, response)
                 click.echo(f"Output written to {output}")
             elif as_json:
                 sys.stdout.write(
@@ -258,8 +256,7 @@ def crawl(site, hops, job_name, max_to_crawl, max_to_process, restrict_domain,
             output_str = "\n".join(lines)
 
         if output:
-            with open(output, "w") as f:
-                f.write(output_str)
+            write_output(output, output_str)
             click.echo(f"Output written to {output}")
         else:
             print_markdown(output_str)
