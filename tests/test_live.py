@@ -86,7 +86,7 @@ def _purge_leaked_crawls(db) -> None:
 
 def test_live_crawl_start_poll_download(db):
     _purge_leaked_crawls(db)
-    name = f"{CRAWL_PREFIX}py-{uuid.uuid4().hex[:8]}-{int(time.time())}"
+    name = f"{CRAWL_PREFIX}{uuid.uuid4().hex[:8]}-{int(time.time())}"  # 28 chars; API limit is 30
     try:
         for _ in db.crawl("https://example.com", job_name=name, hops=0, max_to_crawl=5, max_to_process=5):
             pass
