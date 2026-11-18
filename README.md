@@ -535,13 +535,14 @@ Releases are published by CI; nothing is uploaded from a laptop.
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
 
-The tag must match the `pyproject.toml` version. Pushing it runs two workflows:
-[`publish-pypi.yml`](.github/workflows/publish-pypi.yml) checks the version, runs the
-unit tests and pyright, builds the sdist and wheel, and publishes them to PyPI via
-[trusted publishing](https://docs.pypi.org/trusted-publishers/) (no API token), and
-[`release.yml`](.github/workflows/release.yml) builds the standalone `db` binaries
-and attaches them to a GitHub Release. Running `publish-pypi.yml` manually
-(workflow_dispatch) is a dry run: it builds and checks but never uploads.
+The tag must match the `pyproject.toml` version. Pushing it runs one workflow,
+[`release.yml`](.github/workflows/release.yml), which checks the version, runs the
+unit tests and pyright, builds the sdist and wheel and the standalone `db`
+binaries, then publishes to PyPI via
+[trusted publishing](https://docs.pypi.org/trusted-publishers/) (no API token, no
+GitHub environment; only after the binaries build) and attaches the binaries to a
+GitHub Release. Running `release.yml` manually (workflow_dispatch) is a dry run: it
+builds and checks but never publishes.
 
 `make release` (token from macOS Keychain) remains only as a manual fallback for
 when the workflow can't be used.
