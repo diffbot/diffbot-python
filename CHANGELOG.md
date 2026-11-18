@@ -4,7 +4,7 @@ All notable changes to the `diffbot` Python package are documented here. The for
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.4.1rc1] - 2026-11-18
 
 ### Fixed
 
