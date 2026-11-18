@@ -1,7 +1,7 @@
 """Exception hierarchy for the Diffbot SDK."""
 
 import json
-from typing import Optional
+from typing import Dict, Optional
 
 
 class DiffbotError(Exception):
@@ -15,17 +15,25 @@ class ValidationError(DiffbotError):
 class APIError(DiffbotError):
     """The Diffbot API returned an error response."""
 
-    def __init__(self, status_code: int, body: str):
+    def __init__(self, status_code: int, body: str, headers: Optional[Dict[str, str]] = None):
         self.status_code = status_code
         self.body = body
+        self.headers = headers
         self.message: Optional[str] = None
         self.request_id: Optional[str] = None
         try:
             data = json.loads(body)
-            self.message = data.get("message")
-            self.request_id = data.get("requestId")
-        except (ValueError, AttributeError):
-            pass
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            # Several Diffbot APIs use ``{"errorCode": ..., "error": "..."}`` instead of
+            # ``message``; fall back to it (parity with the TypeScript SDK).
+            message = data.get("message")
+            if not isinstance(message, str):
+                message = data.get("error")
+            self.message = message if isinstance(message, str) else None
+            request_id = data.get("requestId")
+            self.request_id = request_id if isinstance(request_id, str) else None
         display = self.message or (body[:200] + ("..." if len(body) > 200 else ""))
         super().__init__(f"Diffbot API error {status_code}: {display}")
 
@@ -37,9 +45,32 @@ class AuthError(APIError):
 class RateLimitError(APIError):
     """Rate limit exceeded (429)."""
 
-    def __init__(self, status_code: int, body: str, retry_after: Optional[str] = None):
-        super().__init__(status_code, body)
+    def __init__(
+        self,
+        status_code: int,
+        body: str,
+        retry_after: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ):
+        super().__init__(status_code, body, headers=headers)
         self.retry_after = retry_after
+
+
+class NotFoundError(APIError):
+    """A 404 from an endpoint with a documented "not found" shape (e.g. a missing job or report)."""
+
+
+class JobError(APIError):
+    """A job (crawl or bulk) that completed its HTTP request successfully but reports a
+    failed status internally.
+
+    Subclasses :class:`APIError` so existing ``except APIError`` sites keep working;
+    ``isinstance(err, JobError)`` distinguishes it from a transport-level failure.
+    """
+
+    def __init__(self, job_name: str, message: str):
+        super().__init__(500, message)
+        self.job_name = job_name
 
 
 class ExtractionError(DiffbotError):

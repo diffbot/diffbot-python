@@ -1,0 +1,38 @@
+name: Live tests
+
+# Real-API tests (`pytest -m live`). Deliberately never run on pull requests,
+# so a fork or PR can neither spend credits nor reach the secret.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 14 1,15 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: live-tests
+      cancel-in-progress: false
+    env:
+      DIFFBOT_TOKEN: ${{ secrets.DIFFBOT_TOKEN }}
+      # The SDK's own credential lookup reads DIFFBOT_API_TOKEN.
+      DIFFBOT_API_TOKEN: ${{ secrets.DIFFBOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen --extra dev
+
+      - name: Run live tests
+        run: uv run pytest -m live -v

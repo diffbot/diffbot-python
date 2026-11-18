@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffbot"
-version = "3.1.1"
+version = "3.4.0"
 description = "Python client library for Diffbot APIs"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -51,6 +51,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pyright>=1.1.390",
 ]
 
 [project.urls]
@@ -77,3 +78,9 @@ include = [
 [tool.pytest.ini_options]
 markers = ["live: marks tests as live integration tests requiring a real DIFFBOT_API_TOKEN"]
 addopts = "-m 'not live'"
+
+[tool.pyright]
+include = ["src", "tests/typing"]
+pythonVersion = "3.9"
+typeCheckingMode = "basic"
+strict = ["src/diffbot/types.py"]

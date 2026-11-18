@@ -75,14 +75,19 @@ place to configure the SDK.
 |----------|---------|---------|
 | `token` | — (required) | all |
 | `timeout` | `30.0` (seconds) | all |
+| `retry` | on, 3 attempts | all; `False` disables, or pass a `RetryPolicy` to tune it |
 | `transport` | httpx default | all |
-| `analyze_url` | `https://api.diffbot.com/v3` | `extract` |
-| `crawler_url` | `https://api.diffbot.com/v3/crawl` | `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
-| `llm_url` | `https://llm.diffbot.com/rag/v1/chat/completions` | `ask`, `ask_json` |
-| `web_search_url` | `https://llm.diffbot.com/api/v1/web_search` | `web_search` |
-| `nlp_url` | `https://nl.diffbot.com/v1/` | `entities` |
-| `dql_url` | `https://kg.diffbot.com/kg/v3/dql` | `dql`, `dql_parallel` |
-| `ontology_url` | `https://kg.diffbot.com/kg/ontology` | `dql_fetch_ontology`, `dql_refresh_ontology` |
+| `api_base` | `https://api.diffbot.com` | `extract`, `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
+| `kg_base` | `https://kg.diffbot.com` | `dql`, `dql_parallel`, `dql_fetch_ontology`, `dql_refresh_ontology` |
+| `llm_base` | `https://llm.diffbot.com` | `ask`, `ask_json`, `web_search` |
+| `nlp_base` | `https://nl.diffbot.com` | `entities` |
+| `analyze_url` | derived from `api_base` | `extract` |
+| `crawler_url` | derived from `api_base` | `crawl`, `crawl_list_jobs`, `crawl_get_job`, `crawl_delete_job` |
+| `llm_url` | derived from `llm_base` | `ask`, `ask_json` |
+| `web_search_url` | derived from `llm_base` | `web_search` |
+| `nlp_url` | derived from `nlp_base` | `entities` |
+| `dql_url` | derived from `kg_base` | `dql`, `dql_parallel` |
+| `ontology_url` | derived from `kg_base` | `dql_fetch_ontology`, `dql_refresh_ontology` |
 
 ```python
 from diffbot import Diffbot
@@ -94,12 +99,41 @@ db = Diffbot(
 )
 ```
 
-`analyze_url` is a base the SDK appends `/{api}` to, and `crawler_url` is used as given
-for job management and with `/data` appended for crawl results. The rest are complete
-endpoints, used as given.
+Point the whole SDK at a staging environment with one option instead of one per endpoint:
 
-Passing `transport` replaces the httpx transport, which is the hook for retries, proxies,
-or mocking in tests. `Diffbot` takes an `httpx.BaseTransport`, `DiffbotAsync` an
+```python
+staging = Diffbot(token="YOUR_TOKEN", api_base="https://staging.example.com")
+```
+
+`api_base`/`kg_base`/`llm_base`/`nlp_base` set the host for every endpoint on that host
+at once. The older per-endpoint options (`analyze_url`, `crawler_url`, `llm_url`,
+`web_search_url`, `nlp_url`, `dql_url`, `ontology_url`) still work and win over the
+matching base when both are set; `analyze_url` is a base the SDK appends `/{api}` to,
+`crawler_url` is used as given for job management and with `/data` appended for crawl
+results, and the rest are complete endpoints used as given.
+
+Requests retry `429` and `5xx` responses (and connection errors) with backoff and
+jitter, honoring a `Retry-After` header, by default. Disable retries or tune the policy:
+
+```python
+from diffbot import Diffbot, RetryPolicy
+
+db = Diffbot(token="YOUR_TOKEN", retry=False)
+# or: retry=RetryPolicy(max_attempts=5)
+```
+
+`max_delay` (seconds, default 5.0) caps the backoff and is also the ceiling for
+`Retry-After`. If the server asks for a longer wait (in seconds or as an HTTP date), the
+SDK does not sleep or retry: the call raises at once with `RateLimitError`
+(`retry_after` holds the raw header) or, for a 5xx, `APIError` (see
+`headers["retry-after"]`), so you decide when to try again.
+
+The transport also accepts a per-call `retryable=False` escape hatch; the SDK uses it
+internally for `crawl_delete_job`, a GET-shaped mutation that must not be retried
+blindly.
+
+Passing `transport` replaces the httpx transport, which is the hook for proxies or
+mocking in tests. `Diffbot` takes an `httpx.BaseTransport`, `DiffbotAsync` an
 `httpx.AsyncBaseTransport`:
 
 ```python
@@ -115,7 +149,19 @@ from diffbot import Diffbot
 
 db = Diffbot(token="YOUR_TOKEN")
 data = db.extract("https://www.example.com")
+
+# Optional keyword-only options (per-API field names are type-checked):
+article = db.extract(
+    "https://www.example.com/post",
+    "article",
+    fmt="json",
+    timeout=60000,  # server-side fetch timeout in ms (default 30000)
+    fields=["links", "quotes"],
+    max_tags=5,
+)
 ```
+
+`timeout` is the Diffbot-side fetch timeout in milliseconds; the SDK raises the HTTP transport timeout to at least `timeout + 10s` so the client never aborts first. `mode` overrides the `fmt="markdown"` → `mode=llm` mapping, and `extra={"proxy": ..., "proxyAuth": ...}` passes anything not named.
 
 ### Ask Diffbot LLM
 ```python
@@ -171,12 +217,49 @@ for event in db.crawl("https://www.example.com", hops=1):
     print(event)
 ```
 
+Job names are limited to 30 characters. The crawler reports a create failure such as an overlong name as HTTP 200 with an `errorCode` in the body; `crawl()` raises `APIError` for it rather than yielding `JOB_CREATED`.
+
+For tools that can't block on a long crawl, start the job without watching, poll it, then download the results:
+
+```python
+import time
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+    pass  # watch=False (the default): only creates the job
+
+while db.crawl_get_job("my-crawl").get("jobStatus", {}).get("status", 0) in (0, 7):
+    time.sleep(5)  # 0 initializing, 7 in progress; 9 complete
+
+records = db.crawl_download("my-crawl")  # list of extracted records
+csv_text = db.crawl_download("my-crawl", format="csv")  # str
+```
+
+`crawl_get_job` returns `{}` for a job that doesn't exist (the TypeScript SDK returns `undefined`).
+
 ### Query the Knowledge Graph
 ```python
 from diffbot import Diffbot
 
 db = Diffbot(token="YOUR_TOKEN")
 results = db.dql('type:Organization name:"Diffbot"')
+
+# The return type follows `format`: DqlResponse (json), str (csv), bytes (xls/xlsx
+# or raw=True), or an iterator of entities (jsonl).
+csv_text = db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+for entity in db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl"):
+    print(entity["entity"]["name"])
+```
+
+### Account and token check
+```python
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+if not db.verify_token():  # True/False; only an auth failure means False
+    raise SystemExit("Diffbot token rejected")
+usage = db.account(days=7).get("usage", [])  # free call; never print the whole response
 ```
 
 ### Web Search
@@ -193,6 +276,9 @@ for r in results["search_results"]:
 # "short" (~1-1.5 KB per result), "medium", "long" (default), or "full"
 results = db.web_search("diffbot knowledge graph", num_results=5, snippet_length="short")
 
+# 1-5 queries in one call (sent as repeated text= params); 0 or >5 raises ValidationError
+results = db.web_search(["diffbot knowledge graph", "diffbot crawl api"], num_results=3)
+
 # "full" with a url: query returns the whole stored page
 page = db.web_search("url:https://en.wikipedia.org/wiki/Knowledge_graph", snippet_length="full")
 ```
@@ -208,6 +294,23 @@ for entity in result["entities"]:
 print("sentiment:", result.get("sentiment"))
 ```
 
+### NLP: other fields (`nlp`)
+`entities()` always requests `entities` and `sentiment`. `nlp()` reaches the rest of the
+same endpoint for a single document.
+```python
+from diffbot import Diffbot
+
+db = Diffbot(token="YOUR_TOKEN")
+result = db.nlp(
+    "Acme Launches Rocket\n\nAcme announced a new rocket today.",
+    fields=["summary", "categories", "language"],
+    format="plain text with title",
+    document_type="news article",
+    custom_summary={"max_number_of_sentences": 1},
+)
+print(result.get("summary"))
+```
+
 ## Async Usage
 
 ### Extract structured content
@@ -219,6 +322,10 @@ async def main():
     async with DiffbotAsync(token="YOUR_TOKEN") as db:
         data = await db.extract("https://www.example.com")
         print(data)
+
+        article = await db.extract(
+            "https://www.example.com/post", "article", fmt="json", timeout=60000, fields=["links"]
+        )
 
 asyncio.run(main())
 ```
@@ -273,6 +380,24 @@ async def main():
 asyncio.run(main())
 ```
 
+Start, poll, then download, without blocking inside one call:
+
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        async for _ in db.crawl("https://www.example.com", job_name="my-crawl", hops=1):
+            pass  # watch=False (the default): only creates the job
+        while (await db.crawl_get_job("my-crawl")).get("jobStatus", {}).get("status", 0) in (0, 7):
+            await asyncio.sleep(5)
+        records = await db.crawl_download("my-crawl")
+        csv_text = await db.crawl_download("my-crawl", format="csv")
+
+asyncio.run(main())
+```
+
 ### Query the Knowledge Graph
 ```python
 import asyncio
@@ -282,6 +407,24 @@ async def main():
     async with DiffbotAsync(token="YOUR_TOKEN") as db:
         results = await db.dql('type:Organization name:"Diffbot"')
         print(results)
+
+        csv_text = await db.dql('type:Organization name:"Diffbot"', size=5, format="csv")
+        async for entity in await db.dql('type:Organization name:"Diffbot"', size=5, format="jsonl"):
+            print(entity["entity"]["name"])
+
+asyncio.run(main())
+```
+
+### Account and token check
+```python
+import asyncio
+from diffbot import DiffbotAsync
+
+async def main():
+    async with DiffbotAsync(token="YOUR_TOKEN") as db:
+        if not await db.verify_token():
+            raise SystemExit("Diffbot token rejected")
+        usage = (await db.account(days=7)).get("usage", [])
 
 asyncio.run(main())
 ```
@@ -381,6 +524,28 @@ environment variable or `~/.diffbot/credentials`:
 ```bash
 DIFFBOT_API_TOKEN=your_token python -m pytest -m live
 ```
+
+## Releasing
+
+Releases are published by CI; nothing is uploaded from a laptop.
+
+1. Bump the version in `pyproject.toml` (`make bump-patch`, `bump-minor`, or `bump-major`), update `CHANGELOG.md`, and merge to `main`.
+2. Tag the merge commit and push the tag:
+   ```bash
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   ```
+
+The tag must match the `pyproject.toml` version. Pushing it runs one workflow,
+[`release.yml`](.github/workflows/release.yml), which checks the version, runs the
+unit tests and pyright, builds the sdist and wheel and the standalone `db`
+binaries, then publishes to PyPI via
+[trusted publishing](https://docs.pypi.org/trusted-publishers/) (no API token, no
+GitHub environment; only after the binaries build) and attaches the binaries to a
+GitHub Release. Running `release.yml` manually (workflow_dispatch) is a dry run: it
+builds and checks but never publishes.
+
+`make release` (token from macOS Keychain) remains only as a manual fallback for
+when the workflow can't be used.
 
 ## Acknowledgements
 

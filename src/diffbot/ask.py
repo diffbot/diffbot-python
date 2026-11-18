@@ -5,6 +5,7 @@ import re
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Iterator, List, Optional
 
 from .errors import ValidationError
+from .types import AskChunk, ChatMessage, ResponseFormat
 
 if TYPE_CHECKING:
     from .client import Diffbot, DiffbotAsync
@@ -20,7 +21,7 @@ _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
-def json_schema_format(schema: Dict[str, Any], *, name: str = "response") -> Dict[str, Any]:
+def json_schema_format(schema: Dict[str, Any], *, name: str = "response") -> ResponseFormat:
     """Build a ``response_format`` value that constrains output to ``schema``.
 
     The endpoint requires the schema nested under ``json_schema.schema``; passing
@@ -36,7 +37,7 @@ def json_schema_format(schema: Dict[str, Any], *, name: str = "response") -> Dic
     return {"type": "json_schema", "json_schema": {"name": name, "schema": schema}}
 
 
-def _validate_response_format(response_format: Optional[Dict[str, Any]]) -> None:
+def _validate_response_format(response_format: Optional[ResponseFormat]) -> None:
     """Reject shapes the endpoint would accept but silently not enforce."""
     if response_format is None:
         return
@@ -61,9 +62,9 @@ def _validate_response_format(response_format: Optional[Dict[str, Any]]) -> None
 
 def _build_payload(
     client: Any,
-    messages: List[Dict[str, str]],
+    messages: List[ChatMessage],
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> tuple:
     _validate_response_format(response_format)
     headers = {"Authorization": f"Bearer {client.token}"}
@@ -75,12 +76,14 @@ def _build_payload(
 
 def _parse_chunk(line: str):
     try:
-        chunk = json.loads(line.replace("data: ", ""))
+        chunk: AskChunk = json.loads(line.replace("data: ", ""))
     except json.JSONDecodeError:
         return None
     choices = chunk.get("choices")
-    if choices and choices[0].get("delta", {}).get("content"):
-        return choices[0]["delta"]["content"]
+    if choices:
+        content = choices[0].get("delta", {}).get("content")
+        if content:
+            return content
     return None
 
 
@@ -119,8 +122,8 @@ ANY_OBJECT_SCHEMA = {"type": "object"}
 
 def _resolve_format(
     schema: Optional[Dict[str, Any]],
-    response_format: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    response_format: Optional[ResponseFormat],
+) -> ResponseFormat:
     if schema is not None and response_format is not None:
         raise ValidationError("pass either schema or response_format, not both")
     if response_format is not None:
@@ -141,42 +144,46 @@ def _check_tool_call_leak(parsed: Any) -> Any:
 
 def ask(
     client: "Diffbot",
-    messages: List[Dict[str, str]],
+    messages: List[ChatMessage],
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> Iterator[str]:
     headers, payload = _build_payload(client, messages, response_format=response_format)
-    with client._http.stream("POST", client.llm_url, headers=headers, json=payload) as response:
-        client._raise_for_status(response)
+    response = client.request("POST", client.llm_url, headers=headers, json=payload, stream=True)
+    try:
         for line in response.iter_lines():
             if line:
                 content = _parse_chunk(line)
                 if content:
                     yield content
+    finally:
+        response.close()
 
 
 async def ask_async(
     client: "DiffbotAsync",
-    messages: List[Dict[str, str]],
+    messages: List[ChatMessage],
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> AsyncIterator[str]:
     headers, payload = _build_payload(client, messages, response_format=response_format)
-    async with client._http.stream("POST", client.llm_url, headers=headers, json=payload) as response:
-        client._raise_for_status(response)
+    response = await client.request("POST", client.llm_url, headers=headers, json=payload, stream=True)
+    try:
         async for line in response.aiter_lines():
             if line:
                 content = _parse_chunk(line)
                 if content:
                     yield content
+    finally:
+        await response.aclose()
 
 
 def ask_json(
     client: "Diffbot",
-    messages: List[Dict[str, str]],
+    messages: List[ChatMessage],
     schema: Optional[Dict[str, Any]] = None,
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> Any:
     fmt = _resolve_format(schema, response_format)
     text = "".join(ask(client, messages, response_format=fmt))
@@ -185,10 +192,10 @@ def ask_json(
 
 async def ask_json_async(
     client: "DiffbotAsync",
-    messages: List[Dict[str, str]],
+    messages: List[ChatMessage],
     schema: Optional[Dict[str, Any]] = None,
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    response_format: Optional[ResponseFormat] = None,
 ) -> Any:
     fmt = _resolve_format(schema, response_format)
     chunks = [chunk async for chunk in ask_async(client, messages, response_format=fmt)]

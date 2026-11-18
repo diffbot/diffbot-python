@@ -5,6 +5,7 @@ from diffbot import (
     APIError,
     AuthError,
     Diffbot,
+    DiffbotAsync,
     ExtractionError,
     RateLimitError,
     ValidationError,
@@ -168,3 +169,132 @@ def test_live_extract(db):
     assert "objects" in result
     assert len(result["objects"]) > 0
     assert "content" in result["objects"][0]
+
+"""
+Caller-set options (additive keyword-only args after fmt)
+"""
+
+
+def _capture_client(**kw):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"objects": []})
+
+    return seen, Diffbot(token="test-token", transport=httpx.MockTransport(handler), **kw)
+
+
+def test_extract_defaults_unchanged():
+    seen, db = _capture_client()
+    db.extract("example.com")
+    assert dict(seen[0].url.params) == {"token": "test-token", "url": "https://example.com", "timeout": "30000", "mode": "llm"}
+
+
+def test_extract_wire_names_and_encoding():
+    seen, db = _capture_client()
+    db.extract(
+        "example.com",
+        "article",
+        fmt="json",
+        timeout=45000,
+        fields=["links", "quotes"],
+        discussion=False,
+        paging=True,
+        max_tags=3,
+        tag_confidence=0.7,
+        category_confidence=0.6,
+        natural_language=["entities", "summary"],
+        summary_num_sentences=2,
+        use_proxy="default",
+    )
+    params = dict(seen[0].url.params)
+    assert params == {
+        "token": "test-token", "url": "https://example.com", "timeout": "45000",
+        "fields": "links,quotes", "discussion": "false", "paging": "true", "maxTags": "3",
+        "tagConfidence": "0.7", "categoryConfidence": "0.6", "naturalLanguage": "entities,summary",
+        "summaryNumSentences": "2", "useProxy": "default",
+    }
+
+
+def test_extract_discussion_max_pages_and_analyze_fallback():
+    seen, db = _capture_client()
+    db.extract("example.com", "discussion", max_pages="all")
+    assert seen[0].url.params["maxPages"] == "all"
+    db.extract("example.com", fallback="article", mode="product")
+    assert seen[1].url.params["fallback"] == "article"
+
+
+def test_extract_mode_overrides_markdown_mapping():
+    seen, db = _capture_client()
+    db.extract("example.com", mode="article")  # fmt defaults to markdown
+    assert seen[0].url.params["mode"] == "article"
+    db.extract("example.com")
+    assert seen[1].url.params["mode"] == "llm"
+
+
+def test_extract_none_options_are_not_sent():
+    seen, db = _capture_client()
+    db.extract("example.com", fmt="json", fields=None, timeout=None)
+    assert "fields" not in seen[0].url.params
+    assert seen[0].url.params["timeout"] == "30000"
+
+
+def test_extract_extra_passes_through_and_rejects_collisions():
+    seen, db = _capture_client()
+    db.extract("example.com", extra={"proxy": "1.2.3.4:80", "proxyAuth": "u:p"})
+    assert seen[0].url.params["proxy"] == "1.2.3.4:80"
+    assert seen[0].url.params["proxyAuth"] == "u:p"
+    for bad in ({"token": "x"}, {"url": "x"}, {"maxPages": "2"}, {"timeout": 1}):
+        with pytest.raises(ValidationError):
+            db.extract("example.com", extra=bad)
+
+
+def test_extract_unknown_option_is_type_error():
+    _, db = _capture_client()
+    with pytest.raises(TypeError):
+        db.extract("example.com", bogus=1)
+
+
+def _read_timeout(request: httpx.Request) -> float:
+    return request.extensions["timeout"]["read"]
+
+
+def test_transport_timeout_is_raised_above_a_long_caller_timeout():
+    seen, db = _capture_client(timeout=30)
+    db.extract("example.com", timeout=60000)
+    assert seen[0].url.params["timeout"] == "60000"  # server-side, ms
+    assert _read_timeout(seen[0]) == 70  # transport (s) = timeout + 10
+
+
+def test_transport_timeout_is_never_lowered_by_a_short_caller_timeout():
+    seen, db = _capture_client(timeout=120)
+    db.extract("example.com", timeout=5000)
+    assert seen[0].url.params["timeout"] == "5000"
+    assert _read_timeout(seen[0]) == 120  # client default kept; 5s + 10s < 120s
+
+
+def test_transport_timeout_untouched_without_caller_timeout():
+    seen, db = _capture_client(timeout=30)
+    db.extract("example.com")
+    assert _read_timeout(seen[0]) == 30
+
+
+@pytest.mark.anyio
+async def test_async_extract_options_and_timeouts():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"objects": []})
+
+    db = DiffbotAsync(token="test-token", timeout=30, transport=httpx.MockTransport(handler))
+    await db.extract("example.com", "article", fmt="json", fields=["links"], max_tags=2, timeout=60000)
+    assert seen[0].url.params["fields"] == "links"
+    assert seen[0].url.params["maxTags"] == "2"
+    assert _read_timeout(seen[0]) == 70
+    db2 = DiffbotAsync(token="test-token", timeout=120, transport=httpx.MockTransport(handler))
+    await db2.extract("example.com", timeout=5000)
+    assert _read_timeout(seen[1]) == 120
+    with pytest.raises(ValidationError):
+        await db2.extract("example.com", extra={"token": "x"})
