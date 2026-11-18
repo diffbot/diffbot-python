@@ -367,3 +367,43 @@ async def test_async_crawl_custom_headers_single_string():
     async for _ in db.crawl("https://example.com", job_name="j", custom_headers="X-A: 1"):
         break
     assert seen[0].url.params.get_list("customHeaders") == ["X-A: 1"]
+
+
+"""
+Tri-state boolean create flags: an explicit False must reach the wire as 0
+"""
+
+
+@pytest.mark.parametrize("kwarg,wire", [("obey_robots", "obeyRobots"), ("use_proxies", "useProxies")])
+@pytest.mark.parametrize("value,expected", [(None, None), (True, "1"), (False, "0")])
+def test_crawl_tristate_flags(kwarg, wire, value, expected):
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    kwargs = {} if value is None else {kwarg: value}
+    next(db.crawl("https://example.com", job_name="j", **kwargs))
+    assert seen[0].url.params.get(wire) == expected
+
+
+def test_crawl_obey_robots_false_sends_0():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j", obey_robots=False))
+    assert seen[0].url.params["obeyRobots"] == "0"
+
+
+def test_crawl_restrict_domain_false_sends_0():
+    seen, handler = _capture_create()
+    db = make_client(handler)
+    next(db.crawl("https://example.com", job_name="j", restrict_domain=False))
+    assert seen[0].url.params["restrictDomain"] == "0"
+
+
+@pytest.mark.anyio
+async def test_async_crawl_obey_robots_and_use_proxies_false_send_0():
+    seen, handler = _capture_create()
+    db = DiffbotAsync(token="test-token", transport=httpx.MockTransport(handler))
+    async for _ in db.crawl("https://example.com", job_name="j", obey_robots=False, use_proxies=False):
+        break
+    p = seen[0].url.params
+    assert p["obeyRobots"] == "0"
+    assert p["useProxies"] == "0"

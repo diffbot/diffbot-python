@@ -42,8 +42,8 @@ def crawl(
     crawl_delay: float = -1,
     url_crawl_pattern: Optional[str] = None,
     url_process_pattern: Optional[str] = None,
-    obey_robots: bool = False,
-    use_proxies: bool = False,
+    obey_robots: Optional[bool] = None,
+    use_proxies: Optional[bool] = None,
     custom_headers: Optional[Union[str, Sequence[str]]] = None,
     watch: bool = False,
     poll_interval: float = 2.0,
@@ -66,6 +66,9 @@ def crawl(
     Recommended pattern for tools that can't block on a long crawl: start with
     ``crawl(..., watch=False)``, poll :func:`crawl_get_job` until its
     ``jobStatus.status`` is terminal, then fetch results with :func:`crawl_download`.
+
+    ``obey_robots``, ``use_proxies`` and ``use_canonical`` are tri-state: ``None`` (the
+    default) omits the param so the API default applies; ``True``/``False`` send ``1``/``0``.
 
     Create options are sent as query params on the existing GET. ``custom_headers`` is
     one ``"Name: value"`` string or a sequence of them (sent as repeated params).
@@ -162,8 +165,8 @@ def _named_create_options(
 def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int,
                         max_to_process: int, hops: int, restrict_domain: bool,
                         api_url: str, crawl_delay: float, url_crawl_pattern: Optional[str],
-                        url_process_pattern: Optional[str], obey_robots: bool,
-                        use_proxies: bool, custom_headers: Optional[Union[str, Sequence[str]]],
+                        url_process_pattern: Optional[str], obey_robots: Optional[bool],
+                        use_proxies: Optional[bool], custom_headers: Optional[Union[str, Sequence[str]]],
                         named: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     params: Dict[str, Any] = {
         "token": client.token,
@@ -182,10 +185,12 @@ def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int
         params["urlCrawlPattern"] = url_crawl_pattern
     if url_process_pattern:
         params["urlProcessPattern"] = url_process_pattern
-    if obey_robots:
-        params["obeyRobots"] = 1
-    if use_proxies:
-        params["useProxies"] = 1
+    # Tri-state flags: ``None`` leaves the API default; an explicit ``False`` must
+    # reach the wire as ``0`` (e.g. ``obeyRobots=0`` to ignore robots.txt).
+    if obey_robots is not None:
+        params["obeyRobots"] = int(obey_robots)
+    if use_proxies is not None:
+        params["useProxies"] = int(use_proxies)
     if custom_headers:
         # a sequence becomes repeated ``customHeaders=`` params; a lone string stays a plain value
         params["customHeaders"] = custom_headers if isinstance(custom_headers, str) else list(custom_headers)
@@ -221,8 +226,8 @@ async def crawl_async(
     crawl_delay: float = -1,
     url_crawl_pattern: Optional[str] = None,
     url_process_pattern: Optional[str] = None,
-    obey_robots: bool = False,
-    use_proxies: bool = False,
+    obey_robots: Optional[bool] = None,
+    use_proxies: Optional[bool] = None,
     custom_headers: Optional[Union[str, Sequence[str]]] = None,
     watch: bool = False,
     poll_interval: float = 2.0,
