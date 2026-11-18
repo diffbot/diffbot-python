@@ -51,6 +51,9 @@ def crawl(
     """Create a crawler job and yield a JOB_CREATED event. If watch=True, poll until
     completion and yield URL_PROCESSED events for each crawled URL.
 
+    ``job_name`` must be at most 30 characters; the crawler answers an overlong name
+    with HTTP 200 + ``errorCode`` 505 and creates nothing, which raises ``APIError``.
+
     Recommended pattern for tools that can't block on a long crawl: start with
     ``crawl(..., watch=False)``, poll :func:`crawl_get_job` until its
     ``jobStatus.status`` is terminal, then fetch results with :func:`crawl_download`."""
@@ -104,14 +107,16 @@ def crawl(
 
 
 def _raise_on_create_error(response: Any) -> None:
-    """The crawler reports some create failures (e.g. a job name over 30 chars) as HTTP 200
-    with ``errorCode``/``error`` in the body; surface them instead of returning JOB_CREATED."""
+    """The crawler reports some create failures (e.g. a job name over 30 chars, errorCode
+    505) as HTTP 200 with ``errorCode``/``error`` in the body and creates nothing; surface
+    them instead of returning JOB_CREATED. The error keeps the real status, body and
+    headers (``APIError.message`` reads the body's ``error`` field)."""
     try:
         data = response.json()
     except ValueError:
         return
     if isinstance(data, dict) and data.get("errorCode"):
-        raise APIError(200, json.dumps({"message": data.get("error") or f"errorCode {data['errorCode']}"}))
+        raise APIError(response.status_code, response.text, headers=dict(response.headers))
 
 
 def _build_crawl_params(client: Any, job_name: str, site: str, max_to_crawl: int,
@@ -288,10 +293,18 @@ def _download_params(client: Any, name: str, format: CrawlDownloadFormat, type: 
     return params
 
 
-def _decode_download(text: str, format: CrawlDownloadFormat) -> Any:
-    if format == "csv":
+def _decode_download(name: str, text: str, format: CrawlDownloadFormat, type: Optional[str]) -> Any:
+    # The ``urls`` report is always CSV text, whatever ``format`` says.
+    if format == "csv" or type == "urls":
         return text
-    return json.loads(text) if text.strip() else []
+    if not text.strip():
+        return []
+    data = json.loads(text)
+    if not isinstance(data, list):
+        # e.g. ``{"errorCode": ..., "error": ...}`` for an unknown job
+        error = data.get("error") if isinstance(data, dict) else None
+        raise JobError(name, f"Crawl data download failed: {error or 'unexpected response'}")
+    return data
 
 
 # The public, overloaded signatures live on ``Diffbot.crawl_download`` /
@@ -310,7 +323,7 @@ def crawl_download(
         params=_download_params(client, name, format, type, num),
         follow_redirects=True,
     )
-    return _decode_download(response.text, format)
+    return _decode_download(name, response.text, format, type)
 
 
 async def crawl_download_async(
@@ -327,4 +340,4 @@ async def crawl_download_async(
         params=_download_params(client, name, format, type, num),
         follow_redirects=True,
     )
-    return _decode_download(response.text, format)
+    return _decode_download(name, response.text, format, type)

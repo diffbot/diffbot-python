@@ -306,6 +306,10 @@ class Diffbot:
     def crawl_download(self, name: str, *, format: Literal["csv"], type: Optional[str] = ..., num: Optional[int] = ...) -> str: ...
     @overload
     def crawl_download(
+        self, name: str, *, format: CrawlDownloadFormat = ..., type: Literal["urls"], num: Optional[int] = ...
+    ) -> str: ...
+    @overload
+    def crawl_download(
         self, name: str, *, format: Literal["json"] = ..., type: Optional[str] = ..., num: Optional[int] = ...
     ) -> List[CrawlDataRecord]: ...
     @overload
@@ -323,8 +327,9 @@ class Diffbot:
         """Download a crawl job's results (``GET /v3/crawl/data``).
 
         ``format="json"`` (default) returns a list of records; ``format="csv"``
-        returns the CSV text. ``type`` selects the report (e.g. ``"urls"``) and
-        ``num`` caps the number of records.
+        returns the CSV text. ``type`` selects the report: ``"urls"`` is always CSV
+        text, whatever ``format`` says. ``num`` caps the number of records. A JSON
+        body that is not a list (e.g. an unknown job) raises ``JobError``.
         """
         return _crawl_download(self, name, format=format, type=type, num=num)
 
@@ -624,6 +629,10 @@ class DiffbotAsync:
     async def crawl_download(self, name: str, *, format: Literal["csv"], type: Optional[str] = ..., num: Optional[int] = ...) -> str: ...
     @overload
     async def crawl_download(
+        self, name: str, *, format: CrawlDownloadFormat = ..., type: Literal["urls"], num: Optional[int] = ...
+    ) -> str: ...
+    @overload
+    async def crawl_download(
         self, name: str, *, format: Literal["json"] = ..., type: Optional[str] = ..., num: Optional[int] = ...
     ) -> List[CrawlDataRecord]: ...
     @overload
@@ -641,8 +650,9 @@ class DiffbotAsync:
         """Download a crawl job's results (``GET /v3/crawl/data``).
 
         ``format="json"`` (default) returns a list of records; ``format="csv"``
-        returns the CSV text. ``type`` selects the report (e.g. ``"urls"``) and
-        ``num`` caps the number of records.
+        returns the CSV text. ``type`` selects the report: ``"urls"`` is always CSV
+        text, whatever ``format`` says. ``num`` caps the number of records. A JSON
+        body that is not a list (e.g. an unknown job) raises ``JobError``.
         """
         return await _crawl_download_async(self, name, format=format, type=type, num=num)
 

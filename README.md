@@ -211,6 +211,8 @@ for event in db.crawl("https://www.example.com", hops=1):
     print(event)
 ```
 
+Job names are limited to 30 characters. The crawler reports a create failure such as an overlong name as HTTP 200 with an `errorCode` in the body; `crawl()` raises `APIError` for it rather than yielding `JOB_CREATED`.
+
 For tools that can't block on a long crawl, start the job without watching, poll it, then download the results:
 
 ```python

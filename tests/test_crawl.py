@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -189,6 +191,20 @@ def test_crawl_download_missing_job_raises_not_found():
         db.crawl_download("nope")
 
 
+def test_crawl_download_urls_report_is_csv_whatever_the_format():
+    seen = []
+    db = make_client(_data_handler(seen, text=URLS_CSV))
+    assert db.crawl_download("job1", type="urls") == URLS_CSV
+    assert "format" not in seen[0].url.params
+
+
+def test_crawl_download_non_list_json_raises_job_error():
+    db = make_client(_data_handler([], json_body={"errorCode": 500, "error": "No collection record"}))
+    with pytest.raises(JobError, match="No collection record") as exc_info:
+        db.crawl_download("nope")
+    assert exc_info.value.job_name == "nope"
+
+
 @pytest.mark.anyio
 async def test_async_crawl_download():
     seen = []
@@ -243,8 +259,11 @@ def test_crawl_raises_when_create_returns_200_with_error_code():
         return httpx.Response(200, json={"errorCode": 505, "error": "name is over 30 chars"})
 
     db = make_client(handler)
-    with pytest.raises(APIError, match="name is over 30 chars"):
+    with pytest.raises(APIError, match="name is over 30 chars") as exc_info:
         next(db.crawl("https://example.com", job_name="x" * 31))
+    assert exc_info.value.status_code == 200
+    assert exc_info.value.message == "name is over 30 chars"
+    assert json.loads(exc_info.value.body)["errorCode"] == 505
 
 
 @pytest.mark.anyio

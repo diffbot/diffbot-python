@@ -18,8 +18,9 @@ workflows. Additive minor: no wire changes. The package version in
   `False`, every other error propagates. The account response carries `token` and
   `childTokens`: don't log it whole.
 - `crawl_download(name, *, format="json", type=None, num=None)` (sync and async):
-  `GET /v3/crawl/data`. `format="csv"` returns `str`, otherwise a list of records.
-  The crawl watcher now uses it. For tools that can't block, the recommended
+  `GET /v3/crawl/data`. `format="csv"` or `type="urls"` (that report is always CSV)
+  returns `str`, otherwise a list of records; a JSON body that is not a list (e.g. an
+  unknown job) raises `JobError`. The crawl watcher now uses it. For tools that can't block, the recommended
   pattern is `crawl(..., watch=False)` -> `crawl_get_job` -> `crawl_download`.
 - `extract()` keyword-only options after `fmt`: `timeout` (server-side fetch timeout
   in ms, default still 30000), `mode` (overrides the `fmt="markdown"` -> `llm`
@@ -38,6 +39,10 @@ workflows. Additive minor: no wire changes. The package version in
   `response.json()`. `csv` now returns `str`, `xls`/`xlsx` return `bytes`, and
   `jsonl` returns an iterator of entities (`AsyncIterator` from the async client).
   `raw=True` is unchanged (undecoded `bytes`).
+- `crawl()` create failures that the crawler reports as HTTP 200 with `errorCode`/
+  `error` in the body (e.g. errorCode 505 for a job name over 30 characters, which
+  creates nothing) now raise `APIError` (status 200, the real body and headers,
+  `message` from `error`) instead of yielding `JOB_CREATED` for a job that doesn't exist.
 
 ### Changed (type-level only)
 
