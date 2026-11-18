@@ -4,6 +4,19 @@ All notable changes to the `diffbot` Python package are documented here. The for
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`crawl(obey_robots=False)` and `crawl(use_proxies=False)` were silently ignored.**
+  An explicit `False` was dropped instead of sent, so the API default applied (for
+  `obeyRobots` that means robots.txt was still obeyed). Both are now tri-state like
+  `use_canonical`: `None` (the new default) omits the param, `True`/`False` send `1`/`0`.
+  Sync and async.
+- **CLI `db crawl`:** `--obey-robots`/`--use-proxies` gain `--no-obey-robots`/
+  `--no-use-proxies`, and `--restrict-domain` gains `--no-restrict-domain` (it could not be
+  turned off before). Omitting the robots/proxies flags still leaves the API default.
+
 ## [3.4.0] - 2026-11-17
 
 First release since 3.1.1 (and includes everything in it). It rolls up three development lines that were never
