@@ -80,6 +80,9 @@ or pin `diffbot<3.2`.
   raising.
 - `crawl()`'s job-failure path now raises `JobError` (carrying the job name)
   instead of a synthesized `APIError(500, ...)`.
+- `APIError.message` falls back to the body's `error` field when there is no
+  `message` (the `{errorCode, error}` shape several Diffbot APIs use), matching
+  the TypeScript SDK.
 
 ### Internal
 
