@@ -37,6 +37,15 @@ Changed). The package version in `pyproject.toml` is bumped at release time.
 
 ### Changed
 
+- **`Retry-After` now has a ceiling** (parity with the TypeScript SDK).
+  `RetryPolicy.max_delay` (default 5.0 s) used to cap only the exponential backoff, so a
+  429/5xx with `Retry-After: 3600` made one call sleep an hour. Now, if `Retry-After`
+  (seconds or HTTP-date form) exceeds `max_delay`, the SDK neither sleeps nor retries
+  and raises at once: `RateLimitError` with `retry_after` set, or `APIError` with the
+  header in `headers` for a 5xx. Sync, async, and streamed requests all behave this
+  way. A `Retry-After` at or under the cap is honored as before; a non-finite value
+  (`inf`, `nan`) now falls back to backoff (`inf` used to crash `time.sleep`). Raise
+  `max_delay` to keep waiting out longer server-requested delays.
 - **`web_search(snippet_length=...)` is validated** (parity with the TypeScript SDK):
   the value is case-insensitive and must be one of `short`, `medium`, `long`, `full`;
   anything else raises `ValidationError` instead of being sent upstream. Breaking only

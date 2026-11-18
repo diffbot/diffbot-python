@@ -122,6 +122,12 @@ db = Diffbot(token="YOUR_TOKEN", retry=False)
 # or: retry=RetryPolicy(max_attempts=5)
 ```
 
+`max_delay` (seconds, default 5.0) caps the backoff and is also the ceiling for
+`Retry-After`. If the server asks for a longer wait (in seconds or as an HTTP date), the
+SDK does not sleep or retry: the call raises at once with `RateLimitError`
+(`retry_after` holds the raw header) or, for a 5xx, `APIError` (see
+`headers["retry-after"]`), so you decide when to try again.
+
 The transport also accepts a per-call `retryable=False` escape hatch; the SDK uses it
 internally for `crawl_delete_job`, a GET-shaped mutation that must not be retried
 blindly.
